@@ -1,0 +1,1 @@
+Acknowledgment: This project is built upon Andrej Karpathy's [nanochat](https://github.com/karpathy/nanochat.git). It was created for educational purposes to practice and implement advanced LLM architectures (SFT, RL, MoE) in resource-constrained environments.
