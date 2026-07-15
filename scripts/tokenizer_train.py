@@ -1,7 +1,11 @@
 import argparse
 import time
+import os
 
 from angstromchat.dataset import parquets_iter_batched
+from angstromchat.tokenizer import RustBPETokenizer
+from angstromchat.common import get_base_dir
+
 
 """
 Train a tokenizer using Andrej Karpathy's nanochat BPE Tokenizer library.
@@ -40,3 +44,16 @@ text_iter = text_iterator()
 
 # Train the tokenizer
 t0 = time.time()
+tokenizer = RustBPETokenizer.train_from_iterator(text_iter, args.vocab_size)
+t1 = time.time()
+train_time = t1 - t0
+print(f"Tokenizer training time: {train_time:.2f}s")
+
+# Save the tokenizer to disk
+base_dir = get_base_dir()
+tokenizer_dir = os.path.join(base_dir, 'tokenizer')
+tokenizer.save(tokenizer_dir)
+
+
+
+
