@@ -54,21 +54,44 @@ class RustBPETokenizer:
         )
         return cls(enc, "<|bos|>")
 
+    def get_vocab_size(self):
+        return self.enc.n_vocab
+
+    def get_special_tokens(self):
+        return self.enc.special_tokens_set
+
     @lru_cache(maxsize=32)
     def encode_special(self, text):
         return self.enc.encode_single_token(text)
 
     def encode(self, text, prepend=None, append=None, num_threads=8):
+        # text can be either a string or a list of strings
+        if prepend is not None:
+            prepend_id = prepend if isinstance(prepend, int) else self.encode_special(prepend)
+        if append is not None:
+            append_id = append if isinstance(append, int) else self.encode_special(append)
 
+        if isinstance(text, str):
+            ids = self.enc.encode_ordinary(text)
+            if prepend is not None and append is not None:
+                ids = [prepend_id, *ids, append_id]
+            elif prepend is not None:
+                ids = [prepend_id, *ids]
+            elif append is not None:
+                ids.append(append_id)
+        elif isinstance(text, list):
+            ids = self.enc.encode_ordinary_batch(text, num_threads=num_threads)
+            if prepend is not None and append is not None:
+                ids = [[prepend_id, *ids_row, append_id] for ids_row in ids]
+            elif prepend is not None:
+                ids = [[prepend_id, *ids_row] for ids_row in ids]
+            elif append is not None:
+                for ids_row in ids:
+                    ids_row.append(append_id)
+        else:
+            raise ValueError(f"Invalid input type: {type(text)}")
 
-
-
-
-
-
-
-
-        
+        return ids        
 
     def __call__(self, *args, **kwargs):
         return self.encode(*args, **kwargs)

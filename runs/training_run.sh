@@ -12,8 +12,16 @@ DATASET_DOWNLOAD_PID=$!
 
 # train tokenizer with 8 shards(8 * ~250M = ~2B characters)
 uv run -m scripts.tokenizer_train
+
 # evaluate tokenizer
 uv run -m scripts.tokenizer_eval
+
+
+
+
+
+
+
 
 #--------------------------------------------------------------------------------------------------
 # BASE MODEL TRAINING
