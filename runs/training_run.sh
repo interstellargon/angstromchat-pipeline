@@ -16,13 +16,6 @@ uv run -m scripts.tokenizer_train
 # evaluate tokenizer
 uv run -m scripts.tokenizer_eval
 
-
-
-
-
-
-
-
 #--------------------------------------------------------------------------------------------------
 # BASE MODEL TRAINING
 

@@ -78,7 +78,7 @@ special_set = set(tokenizer.get_special_tokens())
 token_strings = [tokenizer.decode([token_id]) for token_id in range(vocab_size)]
 token_bytes = []
 for token_id in range(vocab_size):
-    token_str = token_strings(token_id)
+    token_str = token_strings[token_id]
     if token_str in special_set:
         token_bytes.append(0)
     else:

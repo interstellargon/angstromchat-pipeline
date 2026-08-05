@@ -40,18 +40,6 @@ class Report:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 class DummyReport:
     def log(self, *args, **kwargs):
         pass

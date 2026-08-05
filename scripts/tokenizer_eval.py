@@ -3,6 +3,7 @@ Evaluate compression ratio of the tokenizer.
 """
 
 from angstromchat.dataset import parquets_iter_batched
+from angstromchat.tokenizer import RustBPETokenizer, get_tokenizer
 
 
 news_text = r"""
@@ -123,8 +124,91 @@ vocab_sizes = {}
 
 for tokenizer_name in ["gpt2", "gpt4", "ours"]:
     if tokenizer_name == "gpt2":
-        tokenizer = 
+        tokenizer = RustBPETokenizer.from_pretrained("gpt2")
     elif tokenizer_name == "gpt4":
-        tokenizer =
+        tokenizer = RustBPETokenizer.from_pretrained("cl100k_base")
     else:
-        tokenizer =
+        tokenizer = get_tokenizer()
+
+    vocab_sizes[tokenizer_name] = tokenizer.get_vocab_size()
+    tokenizer_results[tokenizer_name] = {}
+
+    for name, text in all_text:
+        encoded = tokenizer.encode(text)
+        decoded = tokenizer.decode(encoded)
+        assert decoded == text
+        
+        encoded_bytes = text.encode('utf-8')
+        # Higher ratio is better. It indicates that more original bytes are compressed into a single token (integer),
+        # which allows the model to pack more information into its limited context window and reduces compute overhead.
+        ratio = len(encoded_bytes) / len(encoded)
+        tokenizer_results[tokenizer_name][name] = {
+            'bytes': len(encoded_bytes),
+            'tokens': len(encoded),
+            'ratio': ratio,
+        }
+
+
+# Print vocab sizes and comparisons
+print(f"\nVocab sizes:")
+print(f"GPT-2: {vocab_sizes['gpt2']}")
+print(f"GPT-4: {vocab_sizes['gpt4']}")
+print(f"Ours: {vocab_sizes['ours']}")
+
+def print_comparison(baseline_name, baseline_results, ours_results, all_text):
+    """Print comparison table between baseline tokenizer and Andrej Karpathy's RustBPE tokenizer."""
+    print(f"\nComparison with {baseline_name}:")
+    print("=" * 95)
+    print(f"{'Text Type':<10} {'Bytes':<8} {baseline_name:<15} {'Ours':<15} {'Relative':<12} {'Better':<10}")
+    print(f"{'':10} {'':8} {'Tokens':<7} {'Ratio':<7} {'Tokens':<7} {'Ratio':<7} {'Diff %':<12}")
+    print("-" * 95)
+
+    for name, text in all_text:
+        baseline_data = baseline_results[name]
+        ours_data = ours_results[name]
+
+        # Calculate relative difference (positive means ours is better, negative means worse)
+        # fewer tokens is better, so we calculate (baseline_tokens - ours_tokens) / baseline_tokens
+        relative_diff = ((baseline_data['tokens'] - ours_data['tokens']) / baseline_data['tokens']) * 100
+
+        # Determine which has better compression (higher ratio = better)
+        if baseline_data['ratio'] > ours_data['ratio']:
+            better = baseline_name
+        elif ours_data['ratio'] > baseline_data['ratio']:
+            better = "Ours"
+        else:
+            better = "Tie"
+
+        print(f"{name:<10} {baseline_data['bytes']:<8} "
+              f"{baseline_data['tokens']:<7} "
+              f"{baseline_data['ratio']:<7.2f}" 
+              f"{ours_data['tokens']:<7}" 
+              f"{ours_data['ratio']:<7.2f}" 
+              f"{relative_diff:+7.1f}%     "
+              f"{better:<10}")
+
+print_comparison("GPT-2", tokenizer_results['gpt2'], tokenizer_results['ours'], all_text)
+print_comparison("GPT-4", tokenizer_results['gpt4'], tokenizer_results['ours'], all_text)
+
+
+# Log to report
+from angstromchat.report import get_report
+lines = []
+for baseline_name in ["GPT-2", "GPT-4"]:
+    baseline_key = baseline_name.lower().replace('-', '')
+    baseline_results = tokenizer_results[baseline_key]
+    ours_results = tokenizer_results['ours']
+    lines.append(f"## Comparison with {baseline_name}")
+    lines.append("")
+    lines.append("| Text Type | Bytes | " + baseline_name + " Tokens | " + baseline_name + " Ratio | Ours Tokens | Ours Ratio | Relative Diff % |")
+    lines.append("|-----------|-------|--------------|--------------|-------------|------------|-----------------|")
+    for name, text in all_text:
+        baseline_data = baseline_results[name]
+        ours_data = ours_results[name]
+        relative_diff = ((baseline_data['tokens'] - ours_data['tokens']) / baseline_data['tokens']) * 100
+        lines.append(f"| {name} | {baseline_data['bytes']} | {baseline_data['tokens']} | {baseline_data['ratio']:.2f} | {ours_data['tokens']} | {ours_data['ratio']:.2f} | {relative_diff:+.1f}% |")
+    lines.append("")
+report_markdown = "\n".join(lines)
+get_report().log(section="Tokenizer evaluation", data=[
+    report_markdown,
+])

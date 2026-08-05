@@ -54,6 +54,19 @@ class RustBPETokenizer:
         )
         return cls(enc, "<|bos|>")
 
+    @classmethod
+    def from_directory(cls, tokenizer_dir):
+        pickle_path = os.path.join(tokenizer_dir, "tokenizer.pkl")
+        with open(pickle_path, "rb") as f:
+            enc = pickle.load(f)
+        return cls(enc, "<|bos|>")
+
+    @classmethod
+    def from_pretrained(cls, tiktoken_name):
+        enc = tiktoken.get_encoding(tiktoken_name)
+        # tiktoken calls the special document delimiter token "<|endoftext|>"
+        return cls(enc, "<|endoftext|>")
+
     def get_vocab_size(self):
         return self.enc.n_vocab
 
@@ -105,6 +118,13 @@ class RustBPETokenizer:
         with open(pickle_path, "wb") as f:
             pickle.dump(self.enc, f)
         print(f"Saved tokenizer encoding to {pickle_path}")
+
+
+def get_tokenizer():
+    from angstromchat.common import get_base_dir
+    base_dir = get_base_dir()
+    tokenizer_dir = os.path.join(base_dir, "tokenizer")
+    return RustBPETokenizer.from_directory(tokenizer_dir)
 
 
 
