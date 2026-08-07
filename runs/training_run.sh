@@ -17,11 +17,23 @@ uv run -m scripts.tokenizer_train
 uv run -m scripts.tokenizer_eval
 
 #--------------------------------------------------------------------------------------------------
-# BASE MODEL TRAINING
-
+# BASE MODEL PRETRAINING
 echo "Waiting for dataset download to complete..."
 wait $DATASET_DOWNLOAD_PID
 
-# train base model
+# Training a d16 causal language model from scratch. Squeezing every single FLOP out of a single RTX 5080 GPU.
+uv run -m scripts.base_train --depth=16 --target-param-data-ratio=10.5 --max-seq-len=2048 --device-batch-size=4 --fp8 --window-pattern L --run=$WANDB_RUN
+
+
+
+
+
+
+
+
+
+
+# evaluate the model: CORE metric, BPB on train/val, and draw samples
+# python -m scripts.base_eval --device-batch-size=4
 
 

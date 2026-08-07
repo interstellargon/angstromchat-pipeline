@@ -1,6 +1,5 @@
 """
-Train a tokenizer using Andrej Karpathy's nanochat BPE Tokenizer library.
-In the style of GPT-4 tokenizer
+Train a tokenizer using Andrej Karpathy's RustBPE Tokenizer library.
 """
 
 import argparse

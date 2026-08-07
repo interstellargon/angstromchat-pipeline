@@ -1,3 +1,7 @@
+"""
+Common utilities for angstromchat.
+"""
+
 import angstromchat
 import os
 

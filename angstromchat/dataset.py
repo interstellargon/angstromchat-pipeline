@@ -1,3 +1,10 @@
+"""
+The base/pretraining dataset is a set of parquet files.
+This file contains utilities for:
+- iterating over the parquet files and yielding documents from it
+- download the files on demand if they are not on disk
+"""
+
 import argparse
 import os
 from multiprocessing import Pool

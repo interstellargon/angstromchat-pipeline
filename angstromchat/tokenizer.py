@@ -1,3 +1,11 @@
+"""
+BPE Tokenizer in the style of GPT-4.
+
+Two implementations are available:
+1) HuggingFace Tokenizer that can do both training and inference but is really confusing
+2) Andrej Karpathy's RustBPE Tokenizer for training and tiktoken for inference
+"""
+
 import rustbpe
 import tiktoken
 from functools import lru_cache
@@ -22,7 +30,7 @@ SPECIAL_TOKENS = [
 SPLIT_PATTERN = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,2}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""
 
 
-# Tokenizer based on andrej karpathy's rustbpe and tiktoken combination
+# Tokenizer based on Andrej Karpathy's rustbpe and tiktoken combination
 class RustBPETokenizer:
     """ Light wrapper around tiktoken (for efficient inference) but train with andrej karpathy's rustbpe"""
     

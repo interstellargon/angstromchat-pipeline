@@ -1,3 +1,7 @@
+"""
+Utilities for generating training report cards.
+"""
+
 import os
 import datetime
 
