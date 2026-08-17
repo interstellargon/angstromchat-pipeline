@@ -3,7 +3,17 @@ Pretrain base model
 """
 
 import argparse
+import torch
+import wandb
 
+from angstromchat.common import autodetect_device_type, print0, compute_init, get_peak_flops, DummyWandb
+from angstromchat.flash_attention import HAS_FA3
+from angstromchat.tokenizer import get_tokenizer, get_token_bytes
+from angstromchat.gpt import GPTConfig, GPT
+
+
+# -----------------------------------------------------------------------------
+# CLI arguments
 
 parser = argparse.ArgumentParser(description="Pretrain base model")
 # Logging
@@ -47,4 +57,64 @@ parser.add_argument("--save-every", type=int, default=-1, help="save checkpoints
 # Output
 parser.add_argument("--model-tag", type=str, default=None, help="override model tag for checkpoint directory name")
 args = parser.parse_args()
-user_config = vars(args).copy()  # for logging
+user_config = vars(args).copy()  
+
+# -----------------------------------------------------------------------------
+# Initialize hardware/DDP configuration, wandb logging, Flash Attention optimizations, and the tokenizer for model setup.
+
+# hardware/DDP configuration
+print0(f"\n\n---------------------------------- START ANGSTROMCHAT ----------------------------------")
+device_type = autodetect_device_type() if args.device_type == "" else args.device_type
+ddp, ddp_rank, ddp_local_rank, ddp_world_size, device = compute_init(device_type)
+master_process = ddp_rank == 0
+synchronize = torch.cuda.synchronize if device_type == "cuda" else lambda: None
+get_max_memory = torch.cuda.max_memory_allocated if device_type == "cuda" else lambda: 0
+if device_type == "cuda":
+    gpu_device_name = torch.cuda.get_device_name(0)
+    gpu_peak_flops = get_peak_flops(gpu_device_name)
+    print0(f"GPU: {gpu_device_name} | Peak FLOPS (BF16): {gpu_peak_flops:.2e}")
+
+# wandb logging init
+use_dummy_wandb = args.run == "dummy" or not master_process
+wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(project="angstromchat", name=args.run, config=user_config)
+
+# Flash Attention status
+if HAS_FA3:
+    print0("✓ Using Flash Attention 3.")
+else:
+    print0("WARNING: Flash Attention 3 not available, using PyTorch SDPA fallback")
+    if args.window_pattern != "L":
+        print0(f"WARNING: SDPA has no support for sliding window attention (window_pattern='{args.window_pattern}'). Your GPU utilization will be terrible.")
+        print0("WARNING: Recommend using --window-pattern L for full context attention without alternating sliding window patterns.")
+
+# Tokenizer
+tokenizer = get_tokenizer()
+token_bytes = get_token_bytes()
+vocab_size = tokenizer.get_vocab_size()
+print0(f"Vocab size: {vocab_size:,}")
+
+# -----------------------------------------------------------------------------
+# Init model
+
+def build_model_meta(depth):
+    """Build a model on meta device for a given depth (shapes/dtypes only, no data)."""
+    base_dim = depth * args.aspect_ratio                                                    # base_dim = 16 * 64 = 1024
+    model_dim = ((base_dim + args.head_dim - 1) // args.head_dim) * args.head_dim           # model_dim = 1024
+    num_heads = model_dim // args.head_dim                                                  # num_heads = 1024 // 128 = 8
+    config = GPTConfig(
+        sequence_len=args.max_seq_len,
+        vocab_size=vocab_size,
+        n_layer=depth,
+        n_head=num_heads,
+        n_kv_head=num_heads,
+        n_embd=model_dim,
+        window_pattern=args.window_pattern
+    )
+
+    with torch.device("meta"):
+        model_meta = GPT(config)
+    return model_meta
+
+# Build the model, move to device, init the weights
+model = build_model_meta(args.depth)
+model_config = model.config
