@@ -91,12 +91,57 @@ class GPT(nn.Module):
             "wte": nn.Embedding(padded_vocab_size, config.n_embd),
             "h": nn.ModuleList([Block(config, layer_idx) for layer_idx in range(config.n_layer)])
         })
+        self.lm_head = nn.Linear(config.n_embd, padded_vocab_size, bias=False)
 
+        # Per-layer learnable scalars (Inspired by modded-nanogpt)
+        # 1. resid_lambdas: Controls the flow of the main residual stream.
+        #    - Acts as a learnable "valve" to stabilize deep networks by scaling down 
+        #      accumulated variance across layers. 
+        #    - Initialized to 1.0 (neutral, 100% flow) and trained with a significantly 
+        #      smaller learning rate to prevent abrupt destabilization of the network.        
+        # 2. x0_lambdas: Continuously re-injects the original token embedding (x0) into every layer.
+        #    - Prevents "representation collapse" (forgetting the original token meaning) 
+        #      in deep layers and creates a direct gradient highway back to the input, 
+        #      significantly accelerating training.
+        #    - Initialized to 0.1 (blending 10% of x0) and trained more aggressively.
+        self.resid_lambdas = nn.Parameter(torch.ones(config.n_layer))   # fake init, real init in init_weights()
+        self.x0_lambdas = nn.Parameter(torch.zeros(config.n_layer))     # fake init, real init in init_weights()
 
+        # Value embeddings (ResFormer-style): alternating layers, last layer always included
+        head_dim = config.n_embd // config.n_head
+        kv_dim = config.n_kv_head * head_dim
+        self.value_embeds = nn.ModuleDict({str(i): nn.Embedding(padded_vocab_size, kv_dim) for i in range(config.n_layer) if has_ve(i, config.n_layer)})
 
+        # To support meta device initialization, init the rotary embeddings here, but it's just "fake" meta tensors only.
+        self.rotary_seq_len = config.sequence_len * 10 # 10X over-compute should be enough
+        cos, sin = self._precompute_rotary_embeddings(self.rotary_seq_len, head_dim)
+        self.register_buffer("cos", cos, persistent=False) # persistent=False means it's not saved to the checkpoint
+        self.register_buffer("sin", sin, persistent=False)
 
-        
-
+    def _precompute_rotary_embeddings(self, seq_len, head_dim, base=10000, device=None):
+        # autodetect the device from model embeddings
+        if device is None:
+            device = self.transformer.wte.weight.device
+        # stride the channels
+        channel_range = torch.arange(0, head_dim, 2, dtype=torch.float32, device=device)
+        inv_freq = 1.0 / (base ** (channel_range / head_dim))
+        # stride the time steps
+        t = torch.arange(seq_len, dtype=torch.float32, device=device)
+        # calculate the rotation frequencies at each pair
+        freqs = torch.outer(t, inv_freq)
+        cos, sin = freqs.cos(), freqs.sin()
+        # Precision Note: "Compute in FP32, Store in BF16"
+        # Why not use bfloat16 from the start? bfloat16 has a severely truncated mantissa 
+        # (only 7 bits of precision). If we perform sensitive math operations—like division, 
+        # large exponentiation (base ** x), and trigonometry (cos/sin)—in bfloat16, 
+        # the microscopic rounding errors will exponentially snowball, completely 
+        # corrupting the angular frequencies into garbage values.
+        # Therefore, we safely compute all complex math in float32 to ensure numerical 
+        # stability, and downcast to bfloat16 ONLY at the very end to save memory/bandwidth 
+        # during the actual forward pass.
+        cos, sin = cos.bfloat16, sin.bfloat16()
+        # add batch and head dims for later broadcasting
+        cos, sin = cos[None, :, None, :], sin[None, :, None, :]     
 
     def _compute_window_sizes(self, config):
         """
