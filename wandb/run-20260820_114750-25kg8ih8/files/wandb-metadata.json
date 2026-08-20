@@ -1,0 +1,47 @@
+{
+  "os": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+  "python": "CPython 3.10.12",
+  "startedAt": "2026-08-20T11:47:50.281947Z",
+  "args": [
+    "--depth=16",
+    "--target-param-data-ratio=10.5",
+    "--max-seq-len=2048",
+    "--device-batch-size=4",
+    "--fp8",
+    "--window-pattern",
+    "L",
+    "--run="
+  ],
+  "program": "-m scripts.base_train",
+  "git": {
+    "remote": "https://github.com/interstellargon/angstromchat-pipeline.git",
+    "commit": "1140edc65813693b907e420ec978fe513ebd5352"
+  },
+  "email": "interstellargon@gmail.com",
+  "root": "/root/angstromchat-pipeline",
+  "host": "a5f77b248280",
+  "executable": "/root/angstromchat-pipeline/.venv/bin/python3",
+  "cpu_count": 8,
+  "cpu_count_logical": 16,
+  "gpu": "NVIDIA GeForce RTX 5080",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "1081101176832",
+      "used": "121371947008"
+    }
+  },
+  "memory": {
+    "total": "16321769472"
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA GeForce RTX 5080",
+      "memoryTotal": "17094934528",
+      "architecture": "Blackwell",
+      "uuid": "GPU-7668b5d2-4745-0a17-ffb5-d1b9eba36680"
+    }
+  ],
+  "cudaVersion": "13.3",
+  "writerId": "l2eson8ljko88mxq07qcz64chrwflndp"
+}

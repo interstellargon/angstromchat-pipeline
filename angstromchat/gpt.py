@@ -118,6 +118,66 @@ class GPT(nn.Module):
         self.register_buffer("cos", cos, persistent=False) # persistent=False means it's not saved to the checkpoint
         self.register_buffer("sin", sin, persistent=False)
 
+    @torch.no_grad()
+    def init_weights(self):
+        """
+        Initialize the full model in this one function for maximum clarity.
+
+        wte (embedding):     normal, std=1.0
+        lm_head:             normal, std=0.001
+        for each block:
+            attn.c_q:        uniform, std=1/sqrt(n_embd)
+            attn.c_k:        uniform, std=1/sqrt(n_embd)
+            attn.c_v:        uniform, std=1/sqrt(n_embd)
+            attn.c_proj:     zeros
+            mlp.c_fc:        uniform, std=1/sqrt(n_embd)
+            mlp.c_proj:      zeros
+        """
+
+        # Embedding, Output Projection
+        torch.nn.init.normal_(self.transformer.wte.weight, mean=0.0, std=1.0)
+        torch.nn.init.normal_(self.lm_head.weight, mean=0.0, std=0.001)
+
+        # Transformer blocks
+        n_embd = self.config.n_embd
+        # Set bounds for Uniform initialization to avoid outliers.
+        # Multiplying by sqrt(3) ensures the Uniform distribution U(-s, s) 
+        # exactly matches the ideal standard deviation (1 / sqrt(n_embd)) of a Normal distribution.
+        s = 3**0.5 * n_embd**-0.5
+        for block in self.transformer.h:
+            torch.nn.init.uniform_(block.attn.c_q.weight, -s, s)
+            torch.nn.init.uniform_(block.attn.c_k.weight, -s, s)
+            torch.nn.init.uniform_(block.attn.c_v.weight, -s, s)
+            # Zero-init prevents initial noise corruption and forces a 1-step gradient delay, stabilizing early training.
+            torch.nn.init.zeros_(block.attn.c_proj.weight)
+            torch.nn.init.uniform_(block.mlp.c_fc.weight, -s, s)
+            torch.nn.init.zeros_(block.mlp.c_proj.weight)
+
+        # Per-layer scalars
+        self.resid_lambdas.fill_(1.0)   # 1.0 => typical residual connections at init
+        self.x0_lambdas.fill_(0.1)      # 0.1 => small initial weight for skip connection to input embedding
+
+        # Value embeddings (init like attn.c_v)
+        for ve in self.value_embeds.values():
+            torch.nn.init.uniform_(ve.weight, -s, s)
+
+        # Initialize gate weights to 0 so the initial gate value becomes 2 * sigmoid(0) = 1.0.
+        # This neutrally injects 100% of the Value Embedding at the start of training
+        for block in self.transformer.h:
+            if block.attn.ve_gate is not None:
+                torch.nn.init.zeros_(block.attn.ve_gate.weight)
+
+        # Rotary embeddings
+        head_dim = self.config.n_embd // self.config.n_head
+        cos, sin = self._precompute_rotary_embeddings(self.rotary_seq_len, head_dim)
+        self.cos, self.sin = cos, sin
+
+        # Cast embeddings to bf16: optimizer can tolerate it and it saves memory
+        if self.transformer.wte.weight.device.type == "cuda":
+            self.transformer.wte.to(dtype=torch.bfloat16)
+            for ve in self.value_embeds.values():
+                ve.to(dtype=torch.bfloat16)
+
     def _precompute_rotary_embeddings(self, seq_len, head_dim, base=10000, device=None):
         # autodetect the device from model embeddings
         if device is None:
@@ -139,9 +199,10 @@ class GPT(nn.Module):
         # Therefore, we safely compute all complex math in float32 to ensure numerical 
         # stability, and downcast to bfloat16 ONLY at the very end to save memory/bandwidth 
         # during the actual forward pass.
-        cos, sin = cos.bfloat16, sin.bfloat16()
+        cos, sin = cos.bfloat16(), sin.bfloat16()
         # add batch and head dims for later broadcasting
-        cos, sin = cos[None, :, None, :], sin[None, :, None, :]     
+        cos, sin = cos[None, :, None, :], sin[None, :, None, :]   
+        return cos, sin  
 
     def _compute_window_sizes(self, config):
         """

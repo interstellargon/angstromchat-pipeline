@@ -1,0 +1,30 @@
+WARNING: Flash Attention 3 not available, using PyTorch SDPA fallback
+Vocab size: 32,768
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 121, in <module>
+    model = build_model_meta(args.depth)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 117, in build_model_meta
+    model_meta = GPT(config)
+  File "/root/angstromchat-pipeline/angstromchat/gpt.py", line 117, in __init__
+    cos, sin = self._precompute_rotary_embeddings(self.rotary_seq_len, head_dim)
+  File "/root/angstromchat-pipeline/angstromchat/gpt.py", line 144, in _precompute_rotary_embeddings
+    cos, sin = cos[None, :, None, :], sin[None, :, None, :]
+TypeError: 'builtin_function_or_method' object is not subscriptable
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 121, in <module>
+    model = build_model_meta(args.depth)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 117, in build_model_meta
+    model_meta = GPT(config)
+  File "/root/angstromchat-pipeline/angstromchat/gpt.py", line 117, in __init__
+    cos, sin = self._precompute_rotary_embeddings(self.rotary_seq_len, head_dim)
+  File "/root/angstromchat-pipeline/angstromchat/gpt.py", line 144, in _precompute_rotary_embeddings
+    cos, sin = cos[None, :, None, :], sin[None, :, None, :]
+TypeError: 'builtin_function_or_method' object is not subscriptable

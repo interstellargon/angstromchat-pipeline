@@ -5,6 +5,8 @@ Pretrain base model
 import argparse
 import torch
 import wandb
+from dataclasses import asdict
+import json
 
 from angstromchat.common import autodetect_device_type, print0, compute_init, get_peak_flops, DummyWandb
 from angstromchat.flash_attention import HAS_FA3
@@ -116,5 +118,10 @@ def build_model_meta(depth):
     return model_meta
 
 # Build the model, move to device, init the weights
-model = build_model_meta(args.depth)
+model = build_model_meta(args.depth)    # 1) Build on meta device (only shapes/dtypes, no data)
 model_config = model.config
+model_config_kwargs = asdict(model_config)
+print0(f"Model config:\n{json.dumps(model_config_kwargs, indent=2)}")
+model.to_empty(device=device)           # 2) All tensors get storage on target device but with uninitialized garbage data
+model.init_weights()                    # 3) All tensors get initialized
+
