@@ -4,14 +4,17 @@ Pretrain base model
 
 import argparse
 import torch
+import torch.nn as nn
 import wandb
 from dataclasses import asdict
 import json
+import os
 
-from angstromchat.common import autodetect_device_type, print0, compute_init, get_peak_flops, DummyWandb
+from angstromchat.common import autodetect_device_type, print0, compute_init, get_peak_flops, DummyWandb, get_base_dir
 from angstromchat.flash_attention import HAS_FA3
 from angstromchat.tokenizer import get_tokenizer, get_token_bytes
 from angstromchat.gpt import GPTConfig, GPT
+from angstromchat.checkpoint_manager import load_checkpoint
 
 
 # -----------------------------------------------------------------------------
@@ -124,4 +127,36 @@ model_config_kwargs = asdict(model_config)
 print0(f"Model config:\n{json.dumps(model_config_kwargs, indent=2)}")
 model.to_empty(device=device)           # 2) All tensors get storage on target device but with uninitialized garbage data
 model.init_weights()                    # 3) All tensors get initialized
+
+# If we are resuming, overwrite the model parameters with those of the checkpoint
+base_dir = get_base_dir()
+output_dirname = args.model_tag if args.model_tag else f"d{args.depth}"
+checkpoint_dir = os.path.join(base_dir, "base_checkpoints", output_dirname)
+resuming = args.resume_from_step != -1
+if resuming:
+    print0(f"Resuming optimization from step {args.resume_from_step}")
+    model_data, optimizer_data, meta_data = load_checkpoint(checkpoint_dir, args.resume_from_step, device, load_optimizer=True, rank=ddp_rank)
+    model.load_state_dict(model_data, strict=True, assign=True)
+    del model_data  # free up this memory after the copy
+
+# -----------------------------------------------------------------------------
+# FP8 training initialization and management
+
+# Convert Linear layers to Float8Linear if --fp8 is set
+if args.fp8:
+    if device_type != "cuda":
+        print0("Warning: FP8 training requires CUDA")
+    else:
+        from angstromchat.fp8 import Float8LinearConfig
+
+        # Filter: only convert layers with dimensions divisible by 16 (FP8 hardware requirement)
+        def fp8_module_filter(mod: nn.Module, fqn:str) -> bool:
+            if not isinstance(mod, nn.Linear):
+                return False
+            if mod.in_features % 16 != 0 or mod.out_features % 16 != 0:
+                return False
+            return True
+
+        fp8_config = Float8LinearConfig.from_recipe_name(args.fp8_recipe)
+
 
