@@ -9,6 +9,7 @@ import wandb
 from dataclasses import asdict
 import json
 import os
+from contextlib import contextmanager
 
 from angstromchat.common import autodetect_device_type, print0, compute_init, get_peak_flops, DummyWandb, get_base_dir
 from angstromchat.flash_attention import HAS_FA3
@@ -147,7 +148,7 @@ if args.fp8:
     if device_type != "cuda":
         print0("Warning: FP8 training requires CUDA")
     else:
-        from angstromchat.fp8 import Float8LinearConfig
+        from angstromchat.fp8 import Float8LinearConfig, convert_to_float8_training
 
         # Filter: only convert layers with dimensions divisible by 16 (FP8 hardware requirement)
         def fp8_module_filter(mod: nn.Module, fqn:str) -> bool:
@@ -158,5 +159,53 @@ if args.fp8:
             return True
 
         fp8_config = Float8LinearConfig.from_recipe_name(args.fp8_recipe)
+        convert_to_float8_training(model, config=fp8_config, module_filter_fn=fp8_module_filter)
+        num_fp8_layers = sum(1 for module in model.modules() if 'Float8' in type(module).__name__) 
+        num_skipped = sum(1 for module in model.modules() if isinstance(module, nn.Linear)) - num_fp8_layers  
+        print0(f"Successfully converted {num_fp8_layers} layers to FP8, skipped {num_skipped} layers (dimensions not divisible by 16).") 
 
+# Context manager to temporarily disable FP8 so that model evaluation remains in BF16
+@contextmanager
+def disable_fp8(model):
+    """Temporarily swap Float8Linear modules with nn.Linear for BF16 evaluation."""
 
+    # Find all Float8Linear modules and their locations
+    fp8_locations = []  # list of (parent_module, attr_name, fp8_module)
+    for name, module in model.named_modules():
+        if 'Float8' in type(module).__name__:
+            if '.' in name:
+                parent_name, attr_name = name.rsplit('.', 1)
+                parent = model.get_submodule(parent_name)
+            else:
+                parent = model
+                attr_name = name
+            fp8_locations.append((parent, attr_name, module))
+
+    if not fp8_locations:
+        yield   # Don't exist FP8 modules -> nothing to do
+        return
+
+    # Swap Float8Linear -> nn.Linear (shares the same weight tensor, no copy)
+    for parent, attr_name, fp8_module in fp8_locations:
+        linear = nn.Linear(
+            fp8_module.in_features,
+            fp8_module.out_features,
+            bias=fp8_module.bias is not None,
+            device=fp8_module.weight.device,
+            dtype=fp8_module.weight.dtype
+        )
+        linear.weight = fp8_module.weight   # share, no copy
+        if fp8_module.bias is not None:
+            linear.bias = fp8_module.bias
+        setattr(parent, attr_name, linear)
+
+    try:
+        yield
+    finally:
+        # Restore all Float8Linear modules
+        for parent, attr_name, fp8_module in fp8_locations:
+            setattr(parent, attr_name, fp8_module)
+        
+
+        
+    
