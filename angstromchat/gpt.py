@@ -231,6 +231,27 @@ class GPT(nn.Module):
         # Final layer always gets full context
         window_sizes[-1] = (long_window, 0)
         return window_sizes
+
+    def num_scaling_params(self):
+        """
+        Return detailed parameter counts for scaling law analysis.
+        """
+        wte = sum(p.numel() for p in self.transformer.wte.parameters())
+        value_embeds = sum(p.numel() for p in self.value_embeds.parameters())
+        lm_head = sum(p.numel() for p in self.lm_head.parameters())
+        transformer_matrices = sum(p.numel() for p in self.transformer.h.parameters())
+        scalars = self.resid_lambdas.numel() + self.x0_lambdas.numel()
+        total = wte + value_embeds + lm_head + transformer_matrices + scalars
+        assert total == sum(p.numel() for p in self.parameters()), "Parameter count mismatch"
+        return {
+            'wte': wte,
+            'value_embeds': value_embeds,
+            'lm_head': lm_head,
+            'transformer_matrices': transformer_matrices,
+            'scalars': scalars,
+            'total': total
+        }
+
         
 
         

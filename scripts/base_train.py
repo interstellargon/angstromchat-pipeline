@@ -26,6 +26,8 @@ parser = argparse.ArgumentParser(description="Pretrain base model")
 parser.add_argument("--run", type=str, default="dummy", help="wandb run name ('dummy' disables wandb logging)")
 # Runtime
 parser.add_argument("--device-type", type=str, default="", help="cuda|cpu (empty = autodetect)")
+# Compile
+parser.add_argument("--no-compile", action="store_true", help="disable torch.compile to save VRAM")
 # FP8 training
 parser.add_argument("--fp8", action="store_true", help="enable FP8 training (requires H100+ GPU)")
 parser.add_argument("--fp8-recipe", type=str, default="tensorwise", choices=["rowwise", "tensorwise"], help="FP8 scaling recipe: tensorwise(faster, recommended) or rowwise(more accurate but slower)")
@@ -205,6 +207,23 @@ def disable_fp8(model):
         # Restore all Float8Linear modules
         for parent, attr_name, fp8_module in fp8_locations:
             setattr(parent, attr_name, fp8_module)
+
+# -----------------------------------------------------------------------------
+# Compile the model (optional; disable with --no-compile to save VRAM)
+
+orig_model = model  # original, uncompiled model, for saving raw model state_dict and for inference/evaluation
+if not getattr(args, "no_compile", False):
+    model = torch.compile(model, dynamic=False) # inputs' shape doesn't change across iterations so dynamic=False is suitable
+else:
+    print0("--no-compile: using eager mode (saves VRAM, slower training)")
+
+# -----------------------------------------------------------------------------
+# Dynamic hyperparameter scaling: derives compute-optimal token horizon and batch size from parameter counts, subsequently adjusting learning rate and weight decay to preserve training dynamics
+
+# Get the parameter counts of our model
+param_counts = model.num_scaling_params()
+
+
         
 
         
