@@ -222,6 +222,28 @@ else:
 
 # Get the parameter counts of our model
 param_counts = model.num_scaling_params()
+print0(f"Parameter counts:")
+for name, count in param_counts.items():
+    print0(f"{name:23s}: {count:,}")
+num_params = param_counts['total']
+num_flops_per_token = model.estimate_flops()
+print0(f"Estimated FLOPs per token: {num_flops_per_token:e}")
+
+# 1) Determine the compute-optimal training horizon (total target tokens D) via scaling laws.
+# Scaling laws assume a fixed target token-to-parameter ratio (D = ratio * N_scaling).
+# To maintain linear scaling trends, N_scaling is strictly defined as core transformer weight matrices plus the lm_head.
+def get_scaling_params(model):
+    params_counts = model.num_scaling_params()
+    scaling_params = params_counts['transformer_matrices'] + params_counts['lm_head']
+    return scaling_params
+num_scaling_params = get_scaling_params(model)
+# optimal tokens for the model we are about to train
+target_tokens = int(args.target_param_data_ratio * num_scaling_params)
+
+# reference model is d12, this is where a lot of hyperparameters are tuned and then transfered to higher depths (muP style)
+d12_ref = build_model_meta(12)  # creates the model on meta device
+D_REF = args.target_param_data_ratio * get_scaling_params(d12_ref)  # compute-optimal d12 training horizon in tokens 
+B_REF = 2**19   # optimal batch size at d12 ~= 524,288 tokens (measured empirically)
 
 
         

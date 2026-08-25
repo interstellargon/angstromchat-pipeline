@@ -252,6 +252,97 @@ class GPT(nn.Module):
             'total': total
         }
 
+    def estimate_flops(self):
+        """
+        FLOPs Calculus for Transformer Language Model Training (Forward + Backward)
+        ===========================================================================
+
+        1. Summary Formula (Per Token)
+        ------------------------------
+        num_flops_per_token = 6 * N_matmul + sum_{l=1}^L (12 * h * q * effective_seq_len_l)
+
+        Where:
+            - N_matmul            : Total matmul weight parameters (excluding embedding layer)
+            - L                   : Number of transformer layers (n_layer)
+            - h                   : Number of attention heads (n_head)
+            - q                   : Dimension per head (head_dim = d_model / n_head)
+            - effective_seq_len_l : Effective sequence length at layer l (accounts for sliding windows)
+
+
+        2. Detailed Breakdown & Derivation
+        ----------------------------------
+        (1) Weight Parameter FLOPs: 6 * N_matmul    
+            Assuming all weight parameters perform dense matrix multiplications with input tensors.
+
+            - Forward Pass (2 FLOPs / parameter):
+            Computing matrix multiplication Y = X @ W requires 1 multiplication (*) and 1 addition (+)
+            per inner-product step for each weight parameter.
+            => Forward FLOPs = 2 * N_matmul
+
+            - Backward Pass (4 FLOPs / parameter, 2x Forward):
+            Requires computing two chain-rule gradients:
+                1) dL/dX = dL/dY @ W^T    -> 2 * N_matmul FLOPs
+                2) dL/dW = X^T @ dL/dY    -> 2 * N_matmul FLOPs
+            => Backward FLOPs = 4 * N_matmul
+
+            - Combined Total (Forward + Backward):
+            2 * N_matmul (Forward) + 4 * N_matmul (Backward) = 6 * N_matmul FLOPs
+
+            * Note on Embedding Layer (wte):
+            Token embedding is an index-based memory lookup (Table Lookup), not a matrix 
+            multiplication. Since it involves no floating-point arithmetic, it is excluded:
+            N_matmul = N_total - N_embedding.
+
+
+        (2) Attention Mechanism FLOPs: 12 * h * q * effective_seq_len  
+            Direct matrix multiplications between dynamically generated activation tensors during 
+            the self-attention process, independent of weight parameters
+
+            - Q @ K^T  (Query-Key dot product)
+            - P @ V    (Attention probability @ Value product, where P = Softmax(Q @ K^T / sqrt(q)))
+
+            For a single layer across a sequence length T:
+            - Q @ K^T Forward : (h, T, q) @ (h, q, T) -> (h, T, T) => 2 * h * q * T^2 FLOPs
+            - P @ V   Forward : (h, T, T) @ (h, T, q) -> (h, T, q) => 2 * h * q * T^2 FLOPs
+            - Total Forward   = 2 * h * q * T^2 + 2 * h * q * T^2 = 4 * h * q * T^2 FLOPs
+            - Total Backward  = 2 * (Forward FLOPs) = 8 * h * q * T^2 FLOPs
+            - Total (Fwd+Bwd) = 4 * h * q * T^2 + 8 * h * q * T^2 = 12 * h * q * T^2 FLOPs (per sequence)
+
+            Per-Token FLOPs Conversion:
+            Dividing total sequence FLOPs by T gives per-token FLOPs for 1 layer:
+                Attn FLOPs / token = (12 * h * q * T^2) / T = 12 * h * q * T
+            (Note: h * q = d_model, so this can also be expressed as 12 * d_model * T)
+
+            * Sliding Window Attention Adaptation:
+            Full sequence length T is capped by window size W_l at layer l:
+            effective_seq_len_l = min(T, W_l).
+
+
+        (3) Omitted Minor Operations
+            Non-matmul operations (<1% of total training compute) are omitted for clarity:
+            - Softmax (exp, sum, division)
+            - Normalization layers (RMSNorm / LayerNorm)
+            - Activation functions (GELU, SwiGLU, ReLU^2)
+            - Element-wise operations (Bias addition, Residual connections)
+        """
+        nparams = sum(p.numel() for p in self.parameters())
+        # Exclude non-matmul params: embeddings and per-layer scalars
+        value_embeds_numel = sum(ve.weight.numel() for ve in self.value_embeds.values())
+        nparams_exclude = (self.transformer.wte.weight.numel() + value_embeds_numel + 
+                           self.resid_lambdas.numel() + self.x0_lambdas.numel())
+        h = self.config.n_head
+        q = self.config.n_embd // self.config.n_head
+        t = self.config.sequence_len
+        # Sum attention FLOPs per layer
+        attn_flops = 0
+        for window_size in self.window_sizes:
+            window = window_size[0]     # (left, right) tuple, we only use left
+            effective_seq = t if window < 0 else min(t, window)
+            attn_flops += 12 * h * q * effective_seq
+        num_flops_per_token = 6 * (nparams - nparams_exclude) + attn_flops
+        return num_flops_per_token
+        
+
         
 
         
