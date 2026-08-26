@@ -10,6 +10,7 @@ from dataclasses import asdict
 import json
 import os
 from contextlib import contextmanager
+import math
 
 from angstromchat.common import autodetect_device_type, print0, compute_init, get_peak_flops, DummyWandb, get_base_dir
 from angstromchat.flash_attention import HAS_FA3
@@ -218,7 +219,9 @@ else:
     print0("--no-compile: using eager mode (saves VRAM, slower training)")
 
 # -----------------------------------------------------------------------------
-# Dynamic hyperparameter scaling: derives compute-optimal token horizon and batch size from parameter counts, subsequently adjusting learning rate and weight decay to preserve training dynamics
+# Scaling Laws Hyperparameter Transfer (muP-style)
+# Calculates the optimal batch size, learning rate, and weight decay for the user-specified target model. 
+# This is achieved by applying scaling laws(Power Lines, T_epoch) to extrapolate from the empirically tuned baseline hyperparameters of a small reference model (Depth 12).
 
 # Get the parameter counts of our model
 param_counts = model.num_scaling_params()
@@ -237,14 +240,26 @@ def get_scaling_params(model):
     scaling_params = params_counts['transformer_matrices'] + params_counts['lm_head']
     return scaling_params
 num_scaling_params = get_scaling_params(model)
-# optimal tokens for the model we are about to train
+# Optimal tokens for the model we are about to train
 target_tokens = int(args.target_param_data_ratio * num_scaling_params)
 
-# reference model is d12, this is where a lot of hyperparameters are tuned and then transfered to higher depths (muP style)
+# Reference model (Depth 12): Hyperparameters empirically tuned at this scale serve as the baseline extrapolated to higher depths (muP style).
 d12_ref = build_model_meta(12)  # creates the model on meta device
-D_REF = args.target_param_data_ratio * get_scaling_params(d12_ref)  # compute-optimal d12 training horizon in tokens 
+D_REF = int(args.target_param_data_ratio * get_scaling_params(d12_ref))  # compute-optimal d12 training horizon in tokens 
 B_REF = 2**19   # optimal batch size at d12 ~= 524,288 tokens (measured empirically)
 
+# 2) Compute-Optimal Batch Size Scaling (Power Lines: B_opt ∝ D^0.383)
+# Ref: https://arxiv.org/abs/2505.13738
+# As the token horizon (D) expands, scaling batch size linearly causes FLOP waste via data redundancy, whereas a fixed batch size leads to gradient noise thrashing in low-loss regimes.
+# The sub-linear exponent (0.383) defines the mathematical equilibrium for compute allocation:
+# investing ~38% of the scaled budget into spatial noise suppression (larger batch) and ~62% into temporal loss landscape traversal (more update steps).
+# The calculated optimal value is then clamped to the nearest power of 2 in logarithmic scale to guarantee memory alignment and maximize hardware utilization (MFU).
+total_batch_size = args.total_batch_size    # user-provided override is possible
+if total_batch_size == -1:
+    batch_size_ratio = target_tokens / D_REF
+    predicted_batch_size = B_REF * batch_size_ratio ** 0.383
+    total_batch_size = 2 ** round(math.log2(predicted_batch_size))  # clamp to nearest power of 2 for efficiency
+    print0(f"Auto-computed optimal batch size: {total_batch_size:,} tokens")
 
         
 
