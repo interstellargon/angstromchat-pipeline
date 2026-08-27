@@ -1,0 +1,22 @@
+WARNING: Flash Attention 3 not available, using PyTorch SDPA fallback
+Vocab size: 32,768
+Model config:
+{
+  "sequence_len": 2048,
+  "vocab_size": 32768,
+  "n_layer": 16,
+  "n_head": 8,
+  "n_kv_head": 8,
+  "n_embd": 1024,
+  "window_pattern": "L"
+}
+Successfully converted 97 layers to FP8, skipped 8 layers (dimensions not divisible by 16).
+Parameter counts:
+wte                    : 33,554,432
+value_embeds           : 268,435,456
+lm_head                : 33,554,432
+transformer_matrices   : 201,328,640
+scalars                : 32
+total                  : 536,872,992
+Estimated FLOPs per token: 1.811952e+09
+Auto-computed optimal batch size: 524,288 tokens

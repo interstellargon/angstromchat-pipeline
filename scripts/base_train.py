@@ -261,7 +261,50 @@ if total_batch_size == -1:
     total_batch_size = 2 ** round(math.log2(predicted_batch_size))  # clamp to nearest power of 2 for efficiency
     print0(f"Auto-computed optimal batch size: {total_batch_size:,} tokens")
 
-        
+# 3) Calculate a learning rate scaling factor based on batch size (bigger batch size allows higher learning rates)
+batch_lr_scale = 1.0
+batch_ratio = total_batch_size / B_REF 
+if batch_ratio != 1.0:
+    # The core logic behind Square Root Scaling (η ∝ √(B/B_ref)):
+    # 1. As batch size (B) increases, the variance (noise) of the mini-batch gradient decreases proportionally (v ∝ 1/B).
+    # 2. SGD requires linear scaling (η ∝ B) because it directly applies the unnormalized gradient.
+    # 3. Adam-family optimizers, however, normalize the update by dividing the 1st moment (m)
+    #    by the square root of the 2nd moment (v): Update = η * (m / sqrt(v)).
+    #    Because the denominator 'sqrt(v)' naturally shrinks as batch size increases, Adam inherently
+    #    amplifies its own step size. For example, if B increases by 4x, variance drops to 1/4,
+    #    and the denominator drops to 1/2, naturally making the step size 2x larger.
+    #    Therefore, to prevent overshooting, we only need to scale the explicit learning rate (η)
+    #    by the square root of the batch ratio (√(B/B_ref)), balancing the optimization trajectory.
+    #    (Note: this scaling rule is empirically derived and may not hold for all model architectures, 
+    #     but it is a standard practice for scaling training hyperparameters.)
+    # 4. Muon: we will use the same scaling for Muon as for AdamW: η ∝ √(B/B_ref) (not studied carefully, assumption!)
+    batch_lr_scale = batch_ratio ** 0.5 # η ∝ √(B/B_ref)
+    print0(f"Scaling LRs by {batch_lr_scale:.4f} for batch size {total_batch_size:,} (reference: {B_REF:,})")
 
+# 4) Calculate the appropriate weight decay scaling based on batch size and token horizon.
+# 1. We adopt the T_epoch (Weight Decay Timescale) framework from https://arxiv.org/abs/2405.13698.
+#    The core theorem states that for optimal generalization, the timescale T_epoch = B / (eta * lambda * D) 
+#    must remain constant across different model scales and datasets.
+# 2. Mathematical derivation for lambda_new (weight_decay_scaled):
+#    Equate T_epoch for both reference (ref) and target (new) models:
+#       B_new / (eta_new * lambda_new * D_new) = B_ref / (eta_ref * lambda_ref * D_ref)
+#    Substitute the AdamW Square Root Scaling rule for eta_new (eta_new = eta_ref * sqrt(B_new / B_ref)):
+#       B_new / (eta_ref * sqrt(B_new / B_ref) * lambda_new * D_new) = B_ref / (eta_ref * lambda_ref * D_ref)
+#    Cancel out eta_ref and solve for lambda_new:
+#       lambda_new = lambda_ref * sqrt(B_new / B_ref) * (D_ref / D_new)
+# 3. Physical meaning of the two scaling factors:
+#    - sqrt(B_new / B_ref) [Batch Size Factor]: Larger batches reduce gradient noise, allowing for larger 
+#    step sizes (eta). The per-step weight decay must scale up proportionally to balance this increased step size.
+#    - (D_ref / D_new) [Token Horizon Factor]: A larger token horizon (D) means more total optimization steps. 
+#    If lambda isn't scaled down, the weights will be penalized too many times over the entire training run, leading to underfitting.
+# 4. Note: The T_epoch framework strictly studies AdamW. Since Muon also utilizes momentum dynamics, 
+#    we assume this scaling theorem provides a mathematically viable approximation for Muon as well.
+weight_decay_scaled = args.weight_decay * math.sqrt(total_batch_size / B_REF) * (D_REF / target_tokens)
+if weight_decay_scaled != args.weight_decay:
+    print0(f"Scaling weight decay from {args.weight_decay:.6f} to {weight_decay_scaled:.6f} for depth {args.depth}")
+
+# -----------------------------------------------------------------------------
+# Initialize the Optimizer (combined MuonAdamW: Muon for matrix params, AdamW for rest)
+optimizer = model.setup_optimizer()
         
     
