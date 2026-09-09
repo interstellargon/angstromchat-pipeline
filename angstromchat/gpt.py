@@ -16,7 +16,8 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 
-from angstromchat.common import print0
+from angstromchat.common import print0, get_dist_info
+from angstromchat.optim import MuonAdamW, DistMuonAdamW
 
 
 @dataclass
@@ -341,7 +342,50 @@ class GPT(nn.Module):
             attn_flops += 12 * h * q * effective_seq
         num_flops_per_token = 6 * (nparams - nparams_exclude) + attn_flops
         return num_flops_per_token
-        
+
+    def setup_optimizer(self, unembedding_lr=0.004, embedding_lr=0.2, scalar_lr=0.5, adam_betas=(0.8, 0.95), matrix_lr=0.02, weight_decay=0.0):
+        model_dim = self.config.n_embd
+        ddp, rank, local_rank, world_size = get_dist_info()
+
+        # Separate out all parameters into groups
+        matrix_params = list(self.transformer.h.parameters())
+        value_embeds_params = list(self.value_embeds.parameters()) 
+        embedding_params = list(self.transformer.wte.parameters())
+        lm_head_params = list(self.lm_head.parameters())
+        resid_params = [self.resid_lambdas]
+        x0_params = [self.x0_lambdas]
+        assert len(list(self.parameters())) == len(matrix_params) + len(value_embeds_params) + len(embedding_params) + len(lm_head_params) + len(resid_params) + len(x0_params)
+
+        # Scale AdamW LR by ∝ 1/√(d_model) to stabilize training across model sizes.
+        # Larger dimensions increase gradient variance. Following muP (Maximal Update Parametrization) 
+        # principles, this inverse square root scaling keeps update magnitudes constant, letting 
+        # us directly transfer hyperparameters tuned on a base 768-dim model without the need for expensive retuning.
+        dmodel_lr_scale = (model_dim / 768) ** -0.5
+        print0(f"Scaling the LR for the AdamW parameters ∝1/√({model_dim}/768) = {dmodel_lr_scale:.6f}")
+
+        # build param_groups
+        param_groups = [
+            # AdamW groups (embeddings, lm_head, scalars)
+            dict(kind='adamw', params=lm_head_params, lr=unembedding_lr * dmodel_lr_scale, betas=adam_betas, eps=1e-10, weight_decay=0.0),
+            dict(kind='adamw', params=embedding_params, lr=embedding_lr * dmodel_lr_scale, betas=adam_betas, eps=1e-10, weight_decay=0.0),
+            dict(kind='adamw', params=value_embeds_params, lr=embedding_lr * dmodel_lr_scale, betas=adam_betas, eps=1e-10, weight_decay=0.0),
+            dict(kind='adamw', params=resid_params, lr=scalar_lr * 0.01, betas=adam_betas, eps=1e-10, weight_decay=0.0),
+            dict(kind='adamw', params=x0_params, lr=scalar_lr, betas=(0.96, 0.95), eps=1e-10, weight_decay=0.0),  # higher beta1 for x0
+
+        ]
+        # Muon groups (matrix params, grouped by shaped for stacking)
+        for shape in sorted({p.shape for p in matrix_params}):
+            group_params = [p for p in matrix_params if p.shape == shape]
+            param_groups.append(dict(kind='muon', params=group_params, lr=matrix_lr, weight_decay=weight_decay))
+
+        Factory = DistMuonAdamW if ddp else MuonAdamW
+        optimizer = Factory(param_groups)
+        for group in optimizer.param_groups:
+            group["initial_lr"] = group["lr"]
+        return optimizer
+
+
+
 
         
 

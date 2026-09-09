@@ -47,7 +47,7 @@ parser.add_argument("--device-batch-size", type=int, default=32, help="per-devic
 parser.add_argument("--total-batch-size", type=int, default=-1, help="total batch size in tokens (-1 = auto-compute optimal)")
 parser.add_argument("--embedding-lr", type=float, default=0.3, help="learning rate for embedding parameters (Adam)")
 parser.add_argument("--unembedding-lr", type=float, default=0.004, help="learning rate for unembedding parameters (Adam)")
-parser.add_argument("--weight-decay", type=float, default=0.2, help="cautious weight decay for the Muon optimizer (for weights)")
+parser.add_argument("--weight-decay", type=float, default=0.2, help="weight decay for the Muon optimizer (for weights)")
 parser.add_argument("--matrix-lr", type=float, default=0.02, help="learning rate for matrix parameters (Muon)")
 parser.add_argument("--scalar-lr", type=float, default=0.5, help="learning rate for scalars (resid_lambdas, x0_lambdas)")
 parser.add_argument("--adam-beta1", type=float, default=0.8, help="Adam beta1 for embedding/unembedding")
@@ -277,7 +277,7 @@ if batch_ratio != 1.0:
     #    by the square root of the batch ratio (√(B/B_ref)), balancing the optimization trajectory.
     #    (Note: this scaling rule is empirically derived and may not hold for all model architectures, 
     #     but it is a standard practice for scaling training hyperparameters.)
-    # 4. Muon: we will use the same scaling for Muon as for AdamW: η ∝ √(B/B_ref) (not studied carefully, assumption!)
+    # 4. Muon: we will use the same scaling for Muon as for AdamW: η ∝ √(B/B_ref) (not studied carefully, assumption)
     batch_lr_scale = batch_ratio ** 0.5 # η ∝ √(B/B_ref)
     print0(f"Scaling LRs by {batch_lr_scale:.4f} for batch size {total_batch_size:,} (reference: {B_REF:,})")
 
@@ -305,6 +305,17 @@ if weight_decay_scaled != args.weight_decay:
 
 # -----------------------------------------------------------------------------
 # Initialize the Optimizer (combined MuonAdamW: Muon for matrix params, AdamW for rest)
-optimizer = model.setup_optimizer()
+optimizer = model.setup_optimizer(
+    # AdamW hyperparameters
+    unembedding_lr=args.unembedding_lr * batch_lr_scale,
+    embedding_lr=args.embedding_lr * batch_lr_scale,
+    scalar_lr=args.scalar_lr * batch_lr_scale,
+    adam_betas=(args.adam_beta1, args.adam_beta2),
+    # Muon hyperparameters
+    matrix_lr=args.matrix_lr * batch_lr_scale,
+    weight_decay=weight_decay_scaled
+)
+
+
         
     
