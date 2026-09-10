@@ -17,6 +17,7 @@ from angstromchat.flash_attention import HAS_FA3
 from angstromchat.tokenizer import get_tokenizer, get_token_bytes
 from angstromchat.gpt import GPTConfig, GPT
 from angstromchat.checkpoint_manager import load_checkpoint
+from angstromchat.dataloader import tokenizing_distributed_data_loader_with_state_bos_bestfit, tokenizing_distributed_data_loader_bos_bestfit
 
 
 # -----------------------------------------------------------------------------
@@ -316,6 +317,15 @@ optimizer = model.setup_optimizer(
     weight_decay=weight_decay_scaled
 )
 
+if resuming:
+    optimizer.load_state_dict(optimizer_data)
+    del optimizer_data
+
+# -----------------------------------------------------------------------------
+# Initialize the DataLoaders for train/val
+dataloader_resume_state_dict = None if not resuming else meta_data["dataloader_state_dict"]
+train_loader = tokenizing_distributed_data_loader_with_state_bos_bestfit(tokenizer, args.device_batch_size, args.max_seq_len, split="train", device=device, resume_state_dict=dataloader_resume_state_dict)
+build_val_loader = lambda: tokenizing_distributed_data_loader_bos_bestfit(tokenizer, args.device_batch_size, args.max_seq_len, split="val", device=device)
 
         
     

@@ -89,6 +89,9 @@ class RustBPETokenizer:
     def encode_special(self, text):
         return self.enc.encode_single_token(text)
 
+    def get_bos_token_id(self):
+        return self.bos_token_id
+
     def encode(self, text, prepend=None, append=None, num_threads=8):
         # text can be either a string or a list of strings
         if prepend is not None:
