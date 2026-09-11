@@ -1,0 +1,44 @@
+WARNING: Flash Attention 3 not available, using PyTorch SDPA fallback
+Vocab size: 32,768
+Model config:
+{
+  "sequence_len": 2048,
+  "vocab_size": 32768,
+  "n_layer": 16,
+  "n_head": 8,
+  "n_kv_head": 8,
+  "n_embd": 1024,
+  "window_pattern": "L"
+}
+Successfully converted 97 layers to FP8, skipped 8 layers (dimensions not divisible by 16).
+Parameter counts:
+wte                    : 33,554,432
+value_embeds           : 268,435,456
+lm_head                : 33,554,432
+transformer_matrices   : 201,328,640
+scalars                : 32
+total                  : 536,872,992
+Estimated FLOPs per token: 1.811952e+09
+Auto-computed optimal batch size: 524,288 tokens
+Scaling weight decay from 0.200000 to 0.093750 for depth 16
+Scaling the LR for the AdamW parameters ∝1/√(1024/768) = 0.866025
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 331, in <module>
+    x, y, dataloader_state_dict = next(train_loader)
+  File "/root/angstromchat-pipeline/angstromchat/dataloader.py", line 134, in tokenizing_distributed_data_loader_with_state_bos_bestfit
+    doc_len = len(doc)
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 331, in <module>
+    x, y, dataloader_state_dict = next(train_loader)
+  File "/root/angstromchat-pipeline/angstromchat/dataloader.py", line 134, in tokenizing_distributed_data_loader_with_state_bos_bestfit
+    doc_len = len(doc)
+KeyboardInterrupt

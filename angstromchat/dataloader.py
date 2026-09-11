@@ -116,5 +116,51 @@ def tokenizing_distributed_data_loader_with_state_bos_bestfit(
     cpu_targets = cpu_buffer[B * T:].view(B, T)
     inputs = gpu_buffer[:B * T].view(B, T)
     targets = gpu_buffer[B * T:].view(B, T)
-    
+
+    while True:
+        for row_idx in range(B):
+            pos = 0
+            while pos < row_capacity:
+                # Ensure buffer has documents
+                while len(doc_buffer) < buffer_size:
+                    refill_buffer()
+
+                remaining = row_capacity - pos
+
+                # Find the largest doc in buffer that fits in remaining space
+                best_idx = -1
+                best_len = 0
+                for i, doc in enumerate(doc_buffer):
+                    doc_len = len(doc)
+                    if doc_len <= remaining and doc_len > best_len:
+                        best_idx = i
+                        best_len = doc_len
+
+                if best_idx >= 0:
+                    doc = doc_buffer.pop(best_idx)
+                    doc_len = len(doc)
+                    row_buffer[row_idx, pos:pos + doc_len] = torch.tensor(doc, dtype=torch.long)
+                    pos += doc_len
+                else:
+                    # No doc fits. crop shortest in buffer to fill remaining and minimize waste
+                    shortest_idx = min(range(len(doc_buffer)), key=lambda i: len(doc_buffer[i]))
+                    doc = doc_buffer.pop(shortest_idx)
+                    row_buffer[row_idx, pos:pos + remaining] = torch.tensor(doc[:remaining], dtype=torch.long)
+                    pos += remaining 
+
+        # Copy to pinned CPU buffer, then single HtoD transfer
+        cpu_inputs.copy_(row_buffer[:, :-1])
+        cpu_targets.copy_(row_buffer[:, 1:])
+
+        state_dict = {"pq_idx": pq_idx, "rg_idx": rg_idx, "epoch": epoch}
+
+        # Single HtoD copy into persistent GPU buffer and yield
+        gpu_buffer.copy_(cpu_buffer, non_blocking=use_cuda)
+        yield inputs, targets, state_dict        
+                    
+def tokenizing_distributed_data_loader_bos_bestfit(*args, **kwargs):
+    """Helper that omits state_dict from yields."""
+    for inputs, targets, state_dict in tokenizing_distributed_data_loader_with_state_bos_bestfit(*args, **kwargs):
+        yield inputs, targets
+            
     

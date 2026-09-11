@@ -306,6 +306,7 @@ if weight_decay_scaled != args.weight_decay:
 
 # -----------------------------------------------------------------------------
 # Initialize the Optimizer (combined MuonAdamW: Muon for matrix params, AdamW for rest)
+
 optimizer = model.setup_optimizer(
     # AdamW hyperparameters
     unembedding_lr=args.unembedding_lr * batch_lr_scale,
@@ -323,9 +324,54 @@ if resuming:
 
 # -----------------------------------------------------------------------------
 # Initialize the DataLoaders for train/val
+
 dataloader_resume_state_dict = None if not resuming else meta_data["dataloader_state_dict"]
 train_loader = tokenizing_distributed_data_loader_with_state_bos_bestfit(tokenizer, args.device_batch_size, args.max_seq_len, split="train", device=device, resume_state_dict=dataloader_resume_state_dict)
 build_val_loader = lambda: tokenizing_distributed_data_loader_bos_bestfit(tokenizer, args.device_batch_size, args.max_seq_len, split="val", device=device)
-
+x, y, dataloader_state_dict = next(train_loader)
         
-    
+# -----------------------------------------------------------------------------
+# Calculate the number of training iterations and set up the various schedulers
+
+# num_iterations: either it is given, or from target flops, or from target data:param ratio (in that order)
+if args.num_iterations > 0:
+    num_iterations = args.num_iterations
+    print0(f"Using user-provided number of iterations: {num_iterations:,}")
+elif args.target_flops > 0:
+    num_iterations = round(args.target_flops / (num_flops_per_token * total_batch_size))
+    print0(f"Calculated number of iterations from target FLOPs: {num_iterations:,}")
+elif args.target_param_data_ratio > 0:
+    num_iterations = target_tokens // total_batch_size
+    print0(f"Calculated number of iterations from target data:param ratio: {num_iterations:,}")
+else:
+    raise ValueError("No training horizon specified")
+
+total_tokens = total_batch_size * num_iterations    # the actual number of tokens we will train for
+print0(f"Total number of training tokens: {total_tokens:,}")
+print0(f"Tokens : Scaling params ratio: {total_tokens / num_scaling_params:.2f}")  # e.g. Chinchilla was ~20
+print0(f"Total training FLOPs estimate: {num_flops_per_token * total_tokens:e}")
+
+# Learning rate schedule (linear warmup, constant, linear warmdown)
+def get_lr_multiplier(it):
+    warmup_iters = round(args.warmup_ratio * num_iterations)
+    warmdown_iters = round(args.warmdown_ratio * num_iterations)
+    if it < warmup_iters:
+        return (it + 1) / warmup_iters
+    elif it <= num_iterations - warmdown_iters:
+        return 1.0
+    else:
+        progress = (num_iterations - it) / warmdown_iters
+        return progress * 1.0 + (1 - progress) * args.final_lr_frac
+
+# Momentum scheduler for Muon optimizer (warms up to 0.95 over the first 300 steps)
+def get_muon_momentum(it):
+    frac = min(it / 300, 1)
+    momentum = (1 - frac) * 0.85 + frac * 0.95
+    return momentum
+
+# Weight decay scheduler for Muon optimizer (linearly decays to zero over the course of training)
+def get_weight_decay(it):
+    return weight_decay_scaled * (1 - it / num_iterations)
+
+# -----------------------------------------------------------------------------
+# Training loop
