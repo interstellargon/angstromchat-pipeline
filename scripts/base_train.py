@@ -9,7 +9,7 @@ import wandb
 from dataclasses import asdict
 import json
 import os
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import math
 
 from angstromchat.common import autodetect_device_type, print0, compute_init, get_peak_flops, DummyWandb, get_base_dir
@@ -18,6 +18,7 @@ from angstromchat.tokenizer import get_tokenizer, get_token_bytes
 from angstromchat.gpt import GPTConfig, GPT
 from angstromchat.checkpoint_manager import load_checkpoint
 from angstromchat.dataloader import tokenizing_distributed_data_loader_with_state_bos_bestfit, tokenizing_distributed_data_loader_bos_bestfit
+from angstromchat.loss_eval import evaluate_bpb
 
 
 # -----------------------------------------------------------------------------
@@ -77,12 +78,15 @@ print0(f"\n\n---------------------------------- START ANGSTROMCHAT -------------
 device_type = autodetect_device_type() if args.device_type == "" else args.device_type
 ddp, ddp_rank, ddp_local_rank, ddp_world_size, device = compute_init(device_type)
 master_process = ddp_rank == 0
+autocast_ctx = torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16) if device_type == "cuda" else nullcontext() 
 synchronize = torch.cuda.synchronize if device_type == "cuda" else lambda: None
 get_max_memory = torch.cuda.max_memory_allocated if device_type == "cuda" else lambda: 0
 if device_type == "cuda":
     gpu_device_name = torch.cuda.get_device_name(0)
     gpu_peak_flops = get_peak_flops(gpu_device_name)
     print0(f"GPU: {gpu_device_name} | Peak FLOPS (BF16): {gpu_peak_flops:.2e}")
+else:
+    gpu_peak_flops = float("inf")  # MFU not meaningful for CPU/MPS
 
 # wandb logging init
 use_dummy_wandb = args.run == "dummy" or not master_process
@@ -375,3 +379,42 @@ def get_weight_decay(it):
 
 # -----------------------------------------------------------------------------
 # Training loop
+
+# Loop state (variables updated by the training loop)
+if not resuming:
+    step = 0
+    val_bpb = None  # will be set if eval_every > 0
+    min_val_bpb = float("inf")
+    smooth_train_loss = 0  # EMA of training loss
+    total_training_time = 0  # total wall-clock time of training
+else:
+    step = meta_data["step"]
+    loop_state = meta_data["loop_state"]
+    val_bpb = meta_data["val_bpb"]
+    min_val_bpb = loop_state["min_val_bpb"]
+    smooth_train_loss = loop_state["smooth_train_loss"]
+    total_training_time = loop_state["total_training_time"]
+
+# Figure out the needed gradient accumulation micro-steps to reach the desired total batch size per step
+tokens_per_fwdbwd = args.device_batch_size * args.max_seq_len  # tokens per iteration for a single rank
+world_tokens_per_fwdbwd = tokens_per_fwdbwd * ddp_world_size  # total tokens per iteration for all ranks
+assert total_batch_size % world_tokens_per_fwdbwd == 0, f"total_batch_size {total_batch_size:,} must be divisible by world_tokens_per_fwdbwd {world_tokens_per_fwdbwd:,}"
+grad_accum_steps = total_batch_size // world_tokens_per_fwdbwd
+print0(f"Tokens / micro-batch / rank: {args.device_batch_size} x {args.max_seq_len} = {tokens_per_fwdbwd:,}")
+print0(f"Tokens / micro-batch: {world_tokens_per_fwdbwd:,}")
+print0(f"Total batch size {total_batch_size:,} => gradient accumulation steps: {grad_accum_steps}")
+
+# Main training loop
+while True:
+    last_step = step == num_iterations
+    flops_so_far = num_flops_per_token * total_batch_size * step
+
+    # once in a while: evaluate the val bpb (all ranks participate)
+    if args.eval_every > 0 and (last_step or step % args.eval_every == 0):
+        model.eval()
+        val_loader = build_val_loader()
+        eval_steps = args.eval_tokens // (args.device_batch_size * args.max_seq_len * ddp_world_size)
+        with disable_fp8(model), autocast_ctx:
+            val_bpb = evaluate_bpb(model, val_loader, eval_steps, token_bytes)
+
+
