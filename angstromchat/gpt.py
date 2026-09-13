@@ -15,6 +15,7 @@ Notable features:
 from dataclasses import dataclass
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from angstromchat.common import print0, get_dist_info
 from angstromchat.optim import MuonAdamW, DistMuonAdamW
@@ -33,6 +34,9 @@ class GPTConfig:
     # Examples: "L"=all full context, "SL"=alternating, "SSL"=two short then one long
     window_pattern: str = "SSSL"
 
+def norm(x):
+    # Purely functional rmsnorm with no learnable params
+    return F.rms_norm(x, (x.size(-1),))
 
 def has_ve(layer_idx, n_layer):
     """Returns True if GPT layer should have Value Embedding (alternating, last layer always included)."""
@@ -97,14 +101,11 @@ class GPT(nn.Module):
         # Per-layer learnable scalars (Inspired by modded-nanogpt)
         # 1. resid_lambdas: Controls the flow of the main residual stream.
         #    - Acts as a learnable "valve" to stabilize deep networks by scaling down 
-        #      accumulated variance across layers. 
-        #    - Initialized to 1.0 (neutral, 100% flow) and trained with a significantly 
-        #      smaller learning rate to prevent abrupt destabilization of the network.        
+        #      accumulated variance across layers.       
         # 2. x0_lambdas: Continuously re-injects the original token embedding (x0) into every layer.
         #    - Prevents "representation collapse" (forgetting the original token meaning) 
         #      in deep layers and creates a direct gradient highway back to the input, 
-        #      significantly accelerating training.
-        #    - Initialized to 0.1 (blending 10% of x0) and trained more aggressively.
+        #      accelerating training.
         self.resid_lambdas = nn.Parameter(torch.ones(config.n_layer))   # fake init, real init in init_weights()
         self.x0_lambdas = nn.Parameter(torch.zeros(config.n_layer))     # fake init, real init in init_weights()
 
@@ -253,6 +254,9 @@ class GPT(nn.Module):
             'total': total
         }
 
+    def get_device(self):
+        return self.transformer.wte.weight.device
+
     def estimate_flops(self):
         """
         FLOPs Calculus for Transformer Language Model Training (Forward + Backward)
@@ -384,6 +388,24 @@ class GPT(nn.Module):
             group["initial_lr"] = group["lr"]
         return optimizer
 
+    def forward(self, idx, targets=None, kv_cache=None, loss_reduction='mean'):
+        B, T = idx.size()
+
+        # Grab the rotary embeddings for the current sequence length (they are of shape (1, seq_len, 1, head_dim/2))
+        assert T <= self.cos.size(1), f"Sequence length grew beyond the rotary embeddings cache: {T} > {self.cos.size(1)}"
+        assert idx.device == self.cos.device, f"Rotary embeddings and idx are on different devices: {idx.device} != {self.cos.device}"
+        assert self.cos.dtype == torch.bfloat16, "Rotary embeddings must be in bfloat16"
+        # if kv cache exists, we need to offset the rotary embeddings to the current position in the cache
+        T0 = 0 if kv_cache is None else kv_cache.get_pos()
+        cos_sin = self.cos[:, T0:T0+T], self.sin[:, T0:T0+T] # truncate cache to current sequence length
+
+        # Forward the trunk of the Transformer
+        x = self.transformer.wte(idx)  # embed current token
+        x = norm(x)
+        x0 = x  # save initial normalized embedding for x0 residual
+        for i, block in enumerate(self.transformer.h):
+            x = self.resid_lambdas[i] * x + self.x0_lambdas[i] * x0
+            ve = 
 
 
 
