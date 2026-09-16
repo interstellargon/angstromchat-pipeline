@@ -19,6 +19,7 @@ import torch.nn.functional as F
 
 from angstromchat.common import print0, get_dist_info
 from angstromchat.optim import MuonAdamW, DistMuonAdamW
+from angstromchat.flash_attention import flash_attn
 
 
 @dataclass
@@ -90,7 +91,7 @@ class CausalSelfAttention(nn.Module):
         # window_size is (left, right) tuple: (N, 0) for causal, (-1, 0) for full context
         if kv_cache is None:
             # Training: causal attention with optional sliding window
-            y = 
+            y = flash_attn.flash_attn_func(q, k, v, causal=True, window_size=window_size)
         else:
             # Inference: use flash attention with kv_cache which handles cache management
             k_cache, v_cache = 
