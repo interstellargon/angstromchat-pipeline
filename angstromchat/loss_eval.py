@@ -29,6 +29,24 @@ def evaluate_bpb(model, batches, steps, token_bytes):
     for _ in range(steps):
         x, y = next(batch_iter)
         loss2d = model(x, y, loss_reduction='none')  # (B, T)
+        loss2d = loss2d.view(-1)  # flatten
+        y = y.view(-1)  # flatten
+        if (y.int() < 0).any(): 
+            # slightly more complex code path if some target tokens are ignore_index (e.g. -1)
+            # any target token < 0 is to be ignored: do NOT index token_bytes with negatives
+            valid = y >= 0
+            y_safe = torch.where(valid, y, torch.zeros_like(y))
+
+
+
+
+
+        else:
+            # fast path: no ignored targets, safe to index directly
+            num_bytes2d = token_bytes[y]
+            total_nats += (loss2d * (num_bytes2d > 0)).sum()
+            total_bytes += num_bytes2d.sum()
+
 
 
     # sum reduce across all ranks

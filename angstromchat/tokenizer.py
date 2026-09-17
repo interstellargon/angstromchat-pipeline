@@ -134,7 +134,6 @@ class RustBPETokenizer:
             pickle.dump(self.enc, f)
         print(f"Saved tokenizer encoding to {pickle_path}")
 
-
 def get_tokenizer():
     from angstromchat.common import get_base_dir
     base_dir = get_base_dir()

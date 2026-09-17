@@ -94,19 +94,34 @@ class CausalSelfAttention(nn.Module):
             y = flash_attn.flash_attn_func(q, k, v, causal=True, window_size=window_size)
         else:
             # Inference: use flash attention with kv_cache which handles cache management
-            k_cache, v_cache = 
-            y = 
-
+            k_cache, v_cache = kv_cache.get_layer_cache(self.layer_idx)
+            y = flash_attn.flash_attn_with_kvcache(
+                q, k_cache, v_cache,
+                k=k, v=v,
+                cache_seqlens=kv_cache.cache_seqlens,
+                causal=True,
+                window_size=window_size
+            )
             # Advance position after last layer processes
+            if self.layer_idx == kv_cache.n_layers - 1:
+                kv_cache.advance(T)
 
-            
-
+        # Re-assemble the heads and project back to residual stream
+        y = y.contiguous().view(B, T, -1)
+        y = self.c_proj(y)
+        return y          
 
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=False)
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=False)
+
+    def forward(self, x):
+        x = self.c_fc(x)
+        x = F.relu(x).square()
+        x = self.c_proj(x)
+        return x
 
 class Block(nn.Module):
     def __init__(self, config, layer_idx):
@@ -455,6 +470,23 @@ class GPT(nn.Module):
             x = self.resid_lambdas[i] * x + self.x0_lambdas[i] * x0
             ve = self.value_embeds[str(i)](idx) if str(i) in self.value_embeds else None
             x = block(x, ve, cos_sin, self.window_sizes[i], kv_cache)
+        x = norm(x)
+
+        # Forward the lm_head (compute logits)
+        softcap = 15  # smoothly cap the logits to range [-softcap, softcap]
+        logits = self.lm_head(x) # (B, T, padded_vocab_size) 
+        logits = logits[..., :self.config.vocab_size]  # slice to remove padding
+        logits = logits.float()  # switch to fp32 for logit softcap and loss computation
+        logits = softcap * torch.tanh(logits / softcap)  # squash the logits
+
+        if targets is not None:
+            # Training
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1, reduction=loss_reduction)
+            return loss
+        else:
+            # Inference
+            return logits
+
 
 
 
