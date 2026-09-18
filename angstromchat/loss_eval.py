@@ -2,6 +2,8 @@
 A function that help with evaluating a base model.
 """
 import torch
+import torch.distributed as dist
+import math
 
 @torch.no_grad()
 def evaluate_bpb(model, batches, steps, token_bytes):
@@ -36,23 +38,24 @@ def evaluate_bpb(model, batches, steps, token_bytes):
             # any target token < 0 is to be ignored: do NOT index token_bytes with negatives
             valid = y >= 0
             y_safe = torch.where(valid, y, torch.zeros_like(y))
-
-
-
-
-
+            # map valid targets to their byte length; ignored targets contribute 0 bytes
+            num_bytes2d = torch.where(valid, token_bytes[y_safe], torch.zeros_like(y, dtype=token_bytes.dtype))
+            total_nats += (loss2d * (num_bytes2d > 0)).sum()
+            total_bytes += num_bytes2d.sum()
         else:
             # fast path: no ignored targets, safe to index directly
             num_bytes2d = token_bytes[y]
             total_nats += (loss2d * (num_bytes2d > 0)).sum()
             total_bytes += num_bytes2d.sum()
-
-
-
     # sum reduce across all ranks
-
+    world_size = dist.get_world_size() if dist.is_initialized() else 1
+    if world_size > 1:
+        dist.all_reduce(total_nats, op=dist.ReduceOp.SUM)
+        dist.all_reduce(total_bytes, op=dist.ReduceOp.SUM)
     # move both to cpu, calculate bpb and return
-
-
-    bpb = 
+    total_nats = total_nats.item()
+    total_bytes = total_bytes.item()
+    if total_bytes == 0:
+        return float('inf') 
+    bpb = total_nats / (math.log(2) * total_bytes)
     return bpb
