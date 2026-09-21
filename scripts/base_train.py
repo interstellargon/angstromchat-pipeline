@@ -19,6 +19,7 @@ from angstromchat.gpt import GPTConfig, GPT
 from angstromchat.checkpoint_manager import load_checkpoint
 from angstromchat.dataloader import tokenizing_distributed_data_loader_with_state_bos_bestfit, tokenizing_distributed_data_loader_bos_bestfit
 from angstromchat.loss_eval import evaluate_bpb
+from scripts.base_eval import evaluate_core
 
 
 # -----------------------------------------------------------------------------
@@ -103,7 +104,7 @@ else:
 
 # Tokenizer
 tokenizer = get_tokenizer()
-token_bytes = get_token_bytes()
+token_bytes = get_token_bytes(device=device)
 vocab_size = tokenizer.get_vocab_size()
 print0(f"Vocab size: {vocab_size:,}")
 
@@ -416,5 +417,25 @@ while True:
         eval_steps = args.eval_tokens // (args.device_batch_size * args.max_seq_len * ddp_world_size)
         with disable_fp8(model), autocast_ctx:
             val_bpb = evaluate_bpb(model, val_loader, eval_steps, token_bytes)
+        print0(f"Step {step:05d} | Validation bpb: {val_bpb:.6f}")
+        if val_bpb < min_val_bpb:
+            min_val_bpb = val_bpb
+        wandb_run.log({
+            "step": step,
+            "total_training_flops": flops_so_far,
+            "total_training_time": total_training_time,
+            "val/bpb": val_bpb,
+        })
+        model.train()
+
+    # once in a while: estimate the CORE metric (all ranks participate)
+    # use the original uncompiled model because the inputs keep changing shape
+    # disable FP8 for evaluation to use BF16 for more consistent/accurate results
+    results = {}
+    if args.core_metric_every > 0 and (last_step or (step > 0 and step % args.core_metric_every == 0)):
+        model.eval()
+        with disable_fp8(orig_model), autocast_ctx:
+            results = evaluate_core(orig_model, tokenizer, device, max_per_task=args.core_metric_max_per_task)
+
 
 

@@ -1,0 +1,111 @@
+WARNING: Flash Attention 3 not available, using PyTorch SDPA fallback
+Vocab size: 32,768
+Model config:
+{
+  "sequence_len": 2048,
+  "vocab_size": 32768,
+  "n_layer": 16,
+  "n_head": 8,
+  "n_kv_head": 8,
+  "n_embd": 1024,
+  "window_pattern": "L"
+}
+Successfully converted 97 layers to FP8, skipped 8 layers (dimensions not divisible by 16).
+Parameter counts:
+wte                    : 33,554,432
+value_embeds           : 268,435,456
+lm_head                : 33,554,432
+transformer_matrices   : 201,328,640
+scalars                : 32
+total                  : 536,872,992
+Estimated FLOPs per token: 1.811952e+09
+Auto-computed optimal batch size: 524,288 tokens
+Scaling weight decay from 0.200000 to 0.093750 for depth 16
+Scaling the LR for the AdamW parameters ∝1/√(1024/768) = 0.866025
+Calculated number of iterations from target data:param ratio: 4,704
+Total number of training tokens: 2,466,250,752
+Tokens : Scaling params ratio: 10.50
+Total training FLOPs estimate: 4.468727e+18
+Tokens / micro-batch / rank: 4 x 2048 = 8,192
+Tokens / micro-batch: 8,192
+Total batch size 524,288 => gradient accumulation steps: 64
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 418, in <module>
+    val_bpb = evaluate_bpb(model, val_loader, eval_steps, token_bytes)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/loss_eval.py", line 33, in evaluate_bpb
+    loss2d = model(x, y, loss_reduction='none')  # (B, T)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 473, in __call__
+    return super().__call__(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 1047, in compile_wrapper
+    result = fn(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/gpt.py", line 472, in forward
+    x = block(x, ve, cos_sin, self.window_sizes[i], kv_cache)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/gpt.py", line 133, in forward
+    x = x + self.attn(norm(x), ve, cos_sin, window_size, kv_cache)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/gpt.py", line 87, in forward
+    q, k = apply_rotary_emb(q, cos, sin), apply_rotary_emb(k, cos, sin)
+  File "/root/angstromchat-pipeline/angstromchat/gpt.py", line 52, in apply_rotary_emb
+    return torch.cat[(y1, y2), 3]
+TypeError: 'builtin_function_or_method' object is not subscriptable
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 418, in <module>
+    val_bpb = evaluate_bpb(model, val_loader, eval_steps, token_bytes)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/loss_eval.py", line 33, in evaluate_bpb
+    loss2d = model(x, y, loss_reduction='none')  # (B, T)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 473, in __call__
+    return super().__call__(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 1047, in compile_wrapper
+    result = fn(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/gpt.py", line 472, in forward
+    x = block(x, ve, cos_sin, self.window_sizes[i], kv_cache)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/gpt.py", line 133, in forward
+    x = x + self.attn(norm(x), ve, cos_sin, window_size, kv_cache)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/gpt.py", line 87, in forward
+    q, k = apply_rotary_emb(q, cos, sin), apply_rotary_emb(k, cos, sin)
+  File "/root/angstromchat-pipeline/angstromchat/gpt.py", line 52, in apply_rotary_emb
+    return torch.cat[(y1, y2), 3]
+TypeError: 'builtin_function_or_method' object is not subscriptable

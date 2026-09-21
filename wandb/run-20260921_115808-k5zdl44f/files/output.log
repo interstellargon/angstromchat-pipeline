@@ -1,0 +1,180 @@
+WARNING: Flash Attention 3 not available, using PyTorch SDPA fallback
+Vocab size: 32,768
+Model config:
+{
+  "sequence_len": 2048,
+  "vocab_size": 32768,
+  "n_layer": 16,
+  "n_head": 8,
+  "n_kv_head": 8,
+  "n_embd": 1024,
+  "window_pattern": "L"
+}
+Successfully converted 97 layers to FP8, skipped 8 layers (dimensions not divisible by 16).
+Parameter counts:
+wte                    : 33,554,432
+value_embeds           : 268,435,456
+lm_head                : 33,554,432
+transformer_matrices   : 201,328,640
+scalars                : 32
+total                  : 536,872,992
+Estimated FLOPs per token: 1.811952e+09
+Auto-computed optimal batch size: 524,288 tokens
+Scaling weight decay from 0.200000 to 0.093750 for depth 16
+Scaling the LR for the AdamW parameters ∝1/√(1024/768) = 0.866025
+Calculated number of iterations from target data:param ratio: 4,704
+Total number of training tokens: 2,466,250,752
+Tokens : Scaling params ratio: 10.50
+Total training FLOPs estimate: 4.468727e+18
+Tokens / micro-batch / rank: 4 x 2048 = 8,192
+Tokens / micro-batch: 8,192
+Total batch size 524,288 => gradient accumulation steps: 64
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 418, in <module>
+    val_bpb = evaluate_bpb(model, val_loader, eval_steps, token_bytes)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/loss_eval.py", line 33, in evaluate_bpb
+    loss2d = model(x, y, loss_reduction='none')  # (B, T)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 473, in __call__
+    return super().__call__(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 1062, in compile_wrapper
+    raise e.remove_dynamo_frames() from None  # see TORCHDYNAMO_VERBOSE=1
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/compile_fx.py", line 1069, in _compile_fx_inner
+    raise InductorError(e, currentframe()).with_traceback(
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/compile_fx.py", line 1049, in _compile_fx_inner
+    mb_compiled_graph = fx_codegen_and_compile(
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/compile_fx.py", line 1836, in fx_codegen_and_compile
+    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/compile_fx.py", line 1597, in codegen_and_compile
+    compiled_module = graph.compile_to_module()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/graph.py", line 2613, in compile_to_module
+    return self._compile_to_module()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/graph.py", line 2619, in _compile_to_module
+    self.codegen_with_cpp_wrapper() if self.cpp_wrapper else self.codegen()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/graph.py", line 2555, in codegen
+    self.scheduler.codegen()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/scheduler.py", line 7350, in codegen
+    self._codegen_partitions()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/scheduler.py", line 7490, in _codegen_partitions
+    self._codegen(partition)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/scheduler.py", line 7641, in _codegen
+    self.get_backend(device).codegen_node(node)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/codegen/cuda_combined_scheduling.py", line 152, in codegen_node
+    return self._triton_scheduling.codegen_node(node)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/codegen/simd.py", line 1864, in codegen_node
+    return self._codegen_nodes(nodes, coalesce_analysis)  # type: ignore[arg-type]
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/codegen/simd.py", line 1837, in _codegen_nodes
+    return self.codegen_node_schedule(
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/codegen/simd.py", line 1961, in codegen_node_schedule
+    src_code = kernel.codegen_kernel()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/codegen/triton.py", line 5760, in codegen_kernel
+    **self.inductor_meta_common(),
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/codegen/triton.py", line 5568, in inductor_meta_common
+    "backend_hash": torch.utils._triton.triton_hash_with_backend(),
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/utils/_triton.py", line 219, in triton_hash_with_backend
+    backend = triton_backend()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/utils/_triton.py", line 193, in triton_backend
+    target = driver.active.get_current_target()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/runtime/driver.py", line 39, in active
+    self._active = self.default
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/runtime/driver.py", line 33, in default
+    self._default = _create_driver()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/runtime/driver.py", line 21, in _create_driver
+    return active_drivers[0]()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/backends/nvidia/driver.py", line 336, in __init__
+    self.utils = CudaUtils()  # TODO: make static
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/backends/nvidia/driver.py", line 66, in __init__
+    mod = compile_module_from_src(
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/runtime/build.py", line 93, in compile_module_from_src
+    so = _build(name, src_path, tmpdir, library_dirs or [], include_dirs or [], libraries or [], ccflags or [])
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/runtime/build.py", line 48, in _build
+    subprocess.check_call(cc_cmd, stdout=subprocess.DEVNULL)
+  File "/usr/lib/python3.10/subprocess.py", line 369, in check_call
+    raise CalledProcessError(retcode, cmd)
+torch._inductor.exc.InductorError: CalledProcessError: Command '['/usr/bin/gcc', '/tmp/tmpdp7ibq4t/cuda_utils.c', '-O3', '-shared', '-fPIC', '-Wno-psabi', '-o', '/tmp/tmpdp7ibq4t/cuda_utils.cpython-310-x86_64-linux-gnu.so', '-l:libcuda.so.1', '-L/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/backends/nvidia/lib', '-L/usr/lib/x86_64-linux-gnu', '-I/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/backends/nvidia/include', '-I/tmp/tmpdp7ibq4t', '-I/usr/include/python3.10']' returned non-zero exit status 1.
+
+Set TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS="+dynamo"
+
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 418, in <module>
+    val_bpb = evaluate_bpb(model, val_loader, eval_steps, token_bytes)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/loss_eval.py", line 33, in evaluate_bpb
+    loss2d = model(x, y, loss_reduction='none')  # (B, T)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 473, in __call__
+    return super().__call__(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 1062, in compile_wrapper
+    raise e.remove_dynamo_frames() from None  # see TORCHDYNAMO_VERBOSE=1
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/compile_fx.py", line 1069, in _compile_fx_inner
+    raise InductorError(e, currentframe()).with_traceback(
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/compile_fx.py", line 1049, in _compile_fx_inner
+    mb_compiled_graph = fx_codegen_and_compile(
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/compile_fx.py", line 1836, in fx_codegen_and_compile
+    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/compile_fx.py", line 1597, in codegen_and_compile
+    compiled_module = graph.compile_to_module()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/graph.py", line 2613, in compile_to_module
+    return self._compile_to_module()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/graph.py", line 2619, in _compile_to_module
+    self.codegen_with_cpp_wrapper() if self.cpp_wrapper else self.codegen()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/graph.py", line 2555, in codegen
+    self.scheduler.codegen()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/scheduler.py", line 7350, in codegen
+    self._codegen_partitions()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/scheduler.py", line 7490, in _codegen_partitions
+    self._codegen(partition)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/scheduler.py", line 7641, in _codegen
+    self.get_backend(device).codegen_node(node)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/codegen/cuda_combined_scheduling.py", line 152, in codegen_node
+    return self._triton_scheduling.codegen_node(node)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/codegen/simd.py", line 1864, in codegen_node
+    return self._codegen_nodes(nodes, coalesce_analysis)  # type: ignore[arg-type]
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/codegen/simd.py", line 1837, in _codegen_nodes
+    return self.codegen_node_schedule(
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/codegen/simd.py", line 1961, in codegen_node_schedule
+    src_code = kernel.codegen_kernel()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/codegen/triton.py", line 5760, in codegen_kernel
+    **self.inductor_meta_common(),
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/_inductor/codegen/triton.py", line 5568, in inductor_meta_common
+    "backend_hash": torch.utils._triton.triton_hash_with_backend(),
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/utils/_triton.py", line 219, in triton_hash_with_backend
+    backend = triton_backend()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/utils/_triton.py", line 193, in triton_backend
+    target = driver.active.get_current_target()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/runtime/driver.py", line 39, in active
+    self._active = self.default
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/runtime/driver.py", line 33, in default
+    self._default = _create_driver()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/runtime/driver.py", line 21, in _create_driver
+    return active_drivers[0]()
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/backends/nvidia/driver.py", line 336, in __init__
+    self.utils = CudaUtils()  # TODO: make static
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/backends/nvidia/driver.py", line 66, in __init__
+    mod = compile_module_from_src(
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/runtime/build.py", line 93, in compile_module_from_src
+    so = _build(name, src_path, tmpdir, library_dirs or [], include_dirs or [], libraries or [], ccflags or [])
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/runtime/build.py", line 48, in _build
+    subprocess.check_call(cc_cmd, stdout=subprocess.DEVNULL)
+  File "/usr/lib/python3.10/subprocess.py", line 369, in check_call
+    raise CalledProcessError(retcode, cmd)
+torch._inductor.exc.InductorError: CalledProcessError: Command '['/usr/bin/gcc', '/tmp/tmpdp7ibq4t/cuda_utils.c', '-O3', '-shared', '-fPIC', '-Wno-psabi', '-o', '/tmp/tmpdp7ibq4t/cuda_utils.cpython-310-x86_64-linux-gnu.so', '-l:libcuda.so.1', '-L/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/backends/nvidia/lib', '-L/usr/lib/x86_64-linux-gnu', '-I/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/triton/backends/nvidia/include', '-I/tmp/tmpdp7ibq4t', '-I/usr/include/python3.10']' returned non-zero exit status 1.
+
+Set TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS="+dynamo"
