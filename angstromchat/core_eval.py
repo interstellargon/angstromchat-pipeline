@@ -7,6 +7,83 @@ import torch
 import torch.distributed as dist
 
 import random
+from jinja2 import Template
+
+
+def render_prompts_mc(item, continuation_delimiter, fewshot_examples=None):
+    """Render complete prompts for a multiple choice question"""
+    template_str = """
+{%- for example in fewshot_examples -%}
+{{ example.query }}{{ continuation_delimiter }}{{ example.choices[example.gold] }}
+
+{% endfor -%}
+{{ item.query }}{{ continuation_delimiter }}{{ choice }}""".strip()
+    template = Template(template_str)
+    fewshot_examples = fewshot_examples or []
+    context = {
+        'fewshot_examples': fewshot_examples,
+        'continuation_delimiter': continuation_delimiter,
+        'item': item
+    }
+    prompt = [ template.render(choice=choice, **context) for choice in item['choices']]
+    return prompt
+
+def render_prompts_schema(item, continuation_delimiter, fewshot_examples=None):
+    """Render complete prompts for a schema question"""
+    template_str = """
+{%- for example in fewshot_examples -%}
+{{ example.context_options[example.gold] }}{{ continuation_delimiter }}{{ example.continuation }}
+
+{% endfor -%}
+{{ context }}{{ continuation_delimiter }}{{ item.continuation }}""".strip()
+    template = Template(template_str)
+    fewshot_examples = fewshot_examples or []
+    context = {
+        'fewshot_examples': fewshot_examples,
+        'continuation_delimiter': continuation_delimiter,
+        'item': item
+    }
+    prompts = [template.render(context=context_option, **context) for context_option in item['context_option']]
+    return prompts
+
+    
+
+
+
+def find_common_length(token_sequences, direction='left'):
+    """
+    Find the length of the common prefix or suffix across token sequences
+    - direction: 'left' for prefix, 'right' for suffix
+    """
+    min_len = min(len(seq) for seq in token_sequences)
+    indices = {
+        'left': range(min_len),
+        'right': range(-1, -min_len-1, -1)
+    }[direction]
+    # Find the first position where the token sequences differ
+    for i, idx in enumerate(indices):
+        token = token_sequences[0][idx]
+        if not all(seq[idx] == token for seq in token_sequences):
+            return i
+    return min_len
+
+def batch_sequences_mc(tokenizer, prompts):
+    # In multiple choice, contexts are the same but the continuation is different (common prefix)
+    tokens = tokenizer(prompts, prepend=tokenizer.get_bos_token_id())
+    # figure out the start and end of each continuation
+    answer_start_idx = find_common_length(tokens, direction='left')
+    start_indices = [answer_start_idx] * len(prompts)
+    end_indices = [len(x) for x in tokens]
+    return tokens, start_indices, end_indices
+
+def batch_sequences_schema(tokenizer, prompts):
+    # In schema tasks, contexts vary but continuation is the same (common suffix)
+    tokens = tokenizer(prompts, prepend=tokenizer.get_bos_token_id())
+    # figure out the start and end of each context
+    suffix_length = find_common_length(tokens, direction='right')
+    end_indices = [len(x) for x in tokens]
+    start_indices = [ei - suffix_length for ei in end_indices]
+    return tokens, start_indices, end_indices
 
 
 
@@ -28,12 +105,11 @@ def evaluate_example(idx, model, tokenizer, data, device, task_meta):
 
     # Render prompts and batch sequences based on task type
     if task_type == 'multiple_choice':
-        prompts = render_prompts_mc()
-        tokens, start_idxs, end_idxs = 
+        prompts = render_prompts_mc(item, continuation_delimiter, fewshot_examples)
+        tokens, start_idxs, end_idxs = batch_sequences_mc(tokenizer, prompts)
     elif task_type == 'schema':
-        prompts = 
-        tokens, start_idxs, end_idxs = 
-
+        prompts = render_prompts_schema(item, continuation_delimiter, fewshot_examples)
+        tokens, start_idxs, end_idxs = batch_sequences_schema(tokenizer, prompts)
     elif task_type == 'language_modeling':
         prompts = 
         tokens, start_idxs, end_idxs = 
