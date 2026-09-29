@@ -46,9 +46,31 @@ def render_prompts_schema(item, continuation_delimiter, fewshot_examples=None):
     prompts = [template.render(context=context_option, **context) for context_option in item['context_option']]
     return prompts
 
-    
+def render_prompts_lm(item, continuation_delimiter, fewshot_examples=None):
+    """
+    Render complete prompt for a language modeling task"""
+    template_str = """
+{%- for example in fewshot_examples -%}
+{{ example.context | trim }}{{ continuation_delimiter }}{{ example.continuation }}
 
-
+{% endfor -%}
+{{ item.context | trim }}{{ continuation_delimiter }}{% if include_continuation %}{{ item.continuation }}{% endif %}""".strip()
+    template = Template(template_str)
+    fewshot_examples = fewshot_examples or []
+    context = {
+        "fewshot_examples":fewshot_examples,
+        'continuation_delimiter':continuation_delimiter,
+        'item':item
+    }
+    # Return two prompts: without and with the continuation
+    prompt_without = template.render(include_continuation=False, **context) 
+    prompt_with = template.render(include_continuation=True, **context)
+    # Due to the way the data seems to be stored, I think I need to strip in the case of LM here.
+    # Otherwise we may get trailing whitespaces in prompt_without (which get absorbed into the next
+    # token in prompt_with), meaning we don't get a nice and clean prefix in the token space
+    # to detect the final continuation. Tokenizers...
+    prompt_without = prompt_without.strip()
+    return [prompt_without, prompt_with] 
 
 def find_common_length(token_sequences, direction='left'):
     """
@@ -85,7 +107,15 @@ def batch_sequences_schema(tokenizer, prompts):
     start_indices = [ei - suffix_length for ei in end_indices]
     return tokens, start_indices, end_indices
 
-
+def batch_sequences_lm(tokenizer, prompts):
+    # In LM tasks, there are two prompts: without and with continuation
+    tokens = tokenizer(prompts, prepend=tokenizer.get_bos_token_id())
+    tokens_without, tokens_with = tokens
+    start_idx, end_idx = len(tokens_without), len(tokens_with)
+    assert start_idx < end_idx, "prompt without is supposed to be a prefix of prompt with"
+    assert tokens_without == tokens_with[:start_idx], "prompt without is supposed to be a prefix of prompt with"
+    # only need the with continuation prompt in the LM task
+    return [tokens_with], [start_idx], [end_idx]
 
 @torch.no_grad()
 def evaluate_example(idx, model, tokenizer, data, device, task_meta):
@@ -111,11 +141,15 @@ def evaluate_example(idx, model, tokenizer, data, device, task_meta):
         prompts = render_prompts_schema(item, continuation_delimiter, fewshot_examples)
         tokens, start_idxs, end_idxs = batch_sequences_schema(tokenizer, prompts)
     elif task_type == 'language_modeling':
-        prompts = 
-        tokens, start_idxs, end_idxs = 
+        prompts = render_prompts_lm(item, continuation_delimiter, fewshot_examples)
+        tokens, start_idxs, end_idxs = batch_sequences_lm(tokenizer, prompts)
     else:
         raise ValueError(f"Unsupported task type: {task_type}")
     
+    # Some models can't forward sequences beyond a certain length (e.g. GPT-2)
+    # In these cases, we have to truncate sequences to max length and adjust the indices
+    if hasattr(model, 'max_seq_len') and model.max_seq_len is not None:
+        max_tokens = 
     
 
 
