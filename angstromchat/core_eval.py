@@ -117,6 +117,31 @@ def batch_sequences_lm(tokenizer, prompts):
     # only need the with continuation prompt in the LM task
     return [tokens_with], [start_idx], [end_idx]
 
+def stack_sequences(tokens, pad_token_id):
+    """Stack up a list of token sequences"""
+    bsz, seq_len = len(tokens), max(len(x) for x in tokens)
+    input_ids = torch.full((bsz, seq_len), pad_token_id, dtype=torch.long)
+    for i, x in enumerate(tokens):
+        input_ids[i, :len(x)] = torch.tensor(x, dtype=torch.long)
+    return input_ids
+
+@torch.no_grad()
+def forward_model(model, input_ids):
+    """
+    Take BxT tensor of token ids, return BxT tensor of losses and argmax predictions.
+    The last column of losses is set to nan because we don't have autoregressive targets there.
+    """
+    batch_size, seq_len = input_ids.size()
+    outputs = model(input_ids)
+
+
+
+
+
+
+    
+
+
 @torch.no_grad()
 def evaluate_example(idx, model, tokenizer, data, device, task_meta):
     """Evaluate a single example, return True if correct, False otherwise"""
@@ -149,8 +174,31 @@ def evaluate_example(idx, model, tokenizer, data, device, task_meta):
     # Some models can't forward sequences beyond a certain length (e.g. GPT-2)
     # In these cases, we have to truncate sequences to max length and adjust the indices
     if hasattr(model, 'max_seq_len') and model.max_seq_len is not None:
-        max_tokens = 
-    
+        max_tokens = model.max_seq_len
+        new_tokens, new_start_idxs, new_end_idxs = [], [], []
+        for t, s, e in zip(tokens, start_idxs, end_idxs):
+            if len(t) > max_tokens:
+                num_to_crop = len(t) - max_tokens
+                new_tokens.append(t[-max_tokens:])
+                new_start_idxs.append(s - num_to_crop)
+                new_end_idxs.append(e - num_to_crop)
+                assert s - num_to_crop >= 0
+                assert e - num_to_crop >= 0
+            else:
+                new_tokens.append(t)
+                new_start_idxs.append(s)
+                new_end_idxs.append(e)
+        tokens, start_idxs, end_idxs = new_tokens, new_start_idxs, new_end_idxs
+
+    # Stack up all the sequences into a batch
+    pad_token_id = tokenizer.get_bos_token_id()
+    input_ids = stack_sequences(tokens, pad_token_id)
+    input_ids = input_ids.to(device)
+
+    # Forward the model, get the autoregressive loss and argmax prediction at each token
+    losses, predictions = forward_model(model, input_ids)
+
+
 
 
 
