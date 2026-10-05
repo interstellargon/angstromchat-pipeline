@@ -65,10 +65,6 @@ def render_prompts_lm(item, continuation_delimiter, fewshot_examples=None):
     # Return two prompts: without and with the continuation
     prompt_without = template.render(include_continuation=False, **context) 
     prompt_with = template.render(include_continuation=True, **context)
-    # Due to the way the data seems to be stored, I think I need to strip in the case of LM here.
-    # Otherwise we may get trailing whitespaces in prompt_without (which get absorbed into the next
-    # token in prompt_with), meaning we don't get a nice and clean prefix in the token space
-    # to detect the final continuation. Tokenizers...
     prompt_without = prompt_without.strip()
     return [prompt_without, prompt_with] 
 
@@ -133,14 +129,19 @@ def forward_model(model, input_ids):
     """
     batch_size, seq_len = input_ids.size()
     outputs = model(input_ids)
-
-
-
-
-
-
-    
-
+    # Roll the tensor to the left by one position to get the (autoregressive) target ids
+    target_ids = torch.roll(input_ids, shifts=-1, dims=1)
+    # Calculate cross entropy at all positions
+    losses = torch.nn.functional.cross_entropy(
+        outputs.view(batch_size * seq_len, -1),
+        target_ids.view(batch_size * seq_len),
+        reduction='none'
+    ).view(batch_size, seq_len)
+    # Set the last column to be nan because there is no autoregressive loss there
+    losses[:, -1] = float('nan')
+    # Get the argmax predictions at each position
+    predictions = outputs.argmax(dim=-1)
+    return losses, predictions
 
 @torch.no_grad()
 def evaluate_example(idx, model, tokenizer, data, device, task_meta):
@@ -198,9 +199,25 @@ def evaluate_example(idx, model, tokenizer, data, device, task_meta):
     # Forward the model, get the autoregressive loss and argmax prediction at each token
     losses, predictions = forward_model(model, input_ids)
 
+    # See if the losses/predictions come out correctly
+    if task_type == 'language_modeling':
+        # language modeling task is currently always batch size 1
+        si = start_idxs[0]
+        ei = end_idxs[0]
+        # predictions[i] predict input_ids[i+1] autoregressively
+        predicted_tokens = predictions[0, si-1:ei-1]
+        actual_tokens = input_ids[0, si:ei]
+        is_correct = torch.all(predicted_tokens == actual_tokens).item()
+    elif task_type in ['multiple_choice', 'schema']:
+        # For MC/schema: find the option with lowest average loss
+        mean_losses = [losses[i, si-1:ei-1].mean().item() 
+                        for i, (si, ei) in enumerate(zip(start_idxs, end_idxs))]
+        pred_idx = mean_losses.index(min(mean_losses))
+        is_correct = pred_idx == item['gold']
+    else:
+        raise ValueError(f"Unsupported task type: {task_type}")
 
-
-
+    return is_correct
 
 def evaluate_task(model, tokenizer, data, device, task_meta):
     """
@@ -213,7 +230,12 @@ def evaluate_task(model, tokenizer, data, device, task_meta):
     # stride the examples to each rank
     for idx in range(rank, len(data), world_size):
         is_correct = evaluate_example(idx, model, tokenizer, data, device, task_meta)
-
-
+        correct[idx] = float(is_correct)
+    # sync results across all the processes if running distributed
+    if world_size > 1:
+        dist.barrier()
+        dist.all_reduce(correct, op=dist.ReduceOp.SUM)
+    # compute the mean
+    mean_correct = correct.mean().item()
 
     return mean_correct
