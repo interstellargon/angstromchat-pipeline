@@ -1,0 +1,79 @@
+WARNING: Flash Attention 3 not available, using PyTorch SDPA fallback
+Vocab size: 32,768
+Model config:
+{
+  "sequence_len": 2048,
+  "vocab_size": 32768,
+  "n_layer": 16,
+  "n_head": 8,
+  "n_kv_head": 8,
+  "n_embd": 1024,
+  "window_pattern": "L"
+}
+Successfully converted 97 layers to FP8, skipped 8 layers (dimensions not divisible by 16).
+Parameter counts:
+wte                    : 33,554,432
+value_embeds           : 268,435,456
+lm_head                : 33,554,432
+transformer_matrices   : 201,328,640
+scalars                : 32
+total                  : 536,872,992
+Estimated FLOPs per token: 1.811952e+09
+Auto-computed optimal batch size: 524,288 tokens
+Scaling weight decay from 0.200000 to 0.093750 for depth 16
+Scaling the LR for the AdamW parameters ∝1/√(1024/768) = 0.866025
+Calculated number of iterations from target data:param ratio: 4,704
+Total number of training tokens: 2,466,250,752
+Tokens : Scaling params ratio: 10.50
+Total training FLOPs estimate: 4.468727e+18
+Tokens / micro-batch / rank: 4 x 2048 = 8,192
+Tokens / micro-batch: 8,192
+Total batch size 524,288 => gradient accumulation steps: 64
+Step 00000 | Validation bpb: 3.175569
+Evaluating: hellaswag_zeroshot (0-shot, type: multiple_choice)... accuracy: 0.3180 | centered: 0.0907 | time: 8.58s
+Evaluating: jeopardy (10-shot, type: language_modeling)... accuracy: 0.0000 | centered: 0.0000 | time: 7.68s
+Evaluating: bigbench_qa_wikidata (10-shot, type: language_modeling)... accuracy: 0.0000 | centered: 0.0000 | time: 8.33s
+Evaluating: arc_easy (10-shot, type: multiple_choice)... accuracy: 0.2460 | centered: -0.0053 | time: 13.53s
+Evaluating: arc_challenge (10-shot, type: multiple_choice)... accuracy: 0.2260 | centered: -0.0320 | time: 13.94s
+Evaluating: copa (0-shot, type: multiple_choice)... accuracy: 0.5100 | centered: 0.0200 | time: 1.52s
+Evaluating: commonsense_qa (10-shot, type: multiple_choice)... accuracy: 0.4280 | centered: 0.2850 | time: 14.33s
+Evaluating: piqa (10-shot, type: multiple_choice)... accuracy: 0.5120 | centered: 0.0240 | time: 9.70s
+Evaluating: openbook_qa (0-shot, type: multiple_choice)... accuracy: 0.2600 | centered: 0.0133 | time: 7.84s
+Evaluating: lambada_openai (0-shot, type: language_modeling)... accuracy: 0.0000 | centered: 0.0000 | time: 7.13s
+Evaluating: hellaswag (10-shot, type: multiple_choice)... accuracy: 0.3180 | centered: 0.0907 | time: 25.07s
+Evaluating: winograd (0-shot, type: schema)... accuracy: 0.5055 | centered: 0.0110 | time: 4.03s
+Evaluating: winogrande (0-shot, type: schema)... accuracy: 0.5560 | centered: 0.1120 | time: 7.31s
+Evaluating: bigbench_dyck_languages (10-shot, type: language_modeling)... accuracy: 0.0000 | centered: 0.0000 | time: 9.55s
+Evaluating: agi_eval_lsat_ar (3-shot, type: multiple_choice)... accuracy: 0.2478 | centered: 0.0598 | time: 9.69s
+Evaluating: bigbench_cs_algorithms (10-shot, type: language_modeling)... accuracy: 0.0000 | centered: 0.0000 | time: 8.24s
+Evaluating: bigbench_operators (10-shot, type: language_modeling)... accuracy: 0.0000 | centered: 0.0000 | time: 3.37s
+Evaluating: bigbench_repeat_copy_logic (10-shot, type: language_modeling)... accuracy: 0.0000 | centered: 0.0000 | time: 0.51s
+Evaluating: squad (10-shot, type: language_modeling)... accuracy: 0.0000 | centered: 0.0000 | time: 17.34s
+Evaluating: coqa (0-shot, type: language_modeling)... accuracy: 0.0000 | centered: 0.0000 | time: 9.20s
+Evaluating: boolq (10-shot, type: multiple_choice)... accuracy: 0.6280 | centered: 0.0211 | time: 34.38s
+Evaluating: bigbench_language_identification (10-shot, type: multiple_choice)... accuracy: 0.2760 | centered: 0.2035 | time: 519.75s
+Step 00000 | CORE metric: 0.0406
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 419, in <module>
+    val_bpb = evaluate_bpb(model, val_loader, eval_steps, token_bytes)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/loss_eval.py", line 36, in evaluate_bpb
+    if (y.int() < 0).any():
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 419, in <module>
+    val_bpb = evaluate_bpb(model, val_loader, eval_steps, token_bytes)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/loss_eval.py", line 36, in evaluate_bpb
+    if (y.int() < 0).any():
+KeyboardInterrupt

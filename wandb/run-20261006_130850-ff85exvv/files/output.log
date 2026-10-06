@@ -1,0 +1,80 @@
+WARNING: Flash Attention 3 not available, using PyTorch SDPA fallback
+Vocab size: 32,768
+Model config:
+{
+  "sequence_len": 2048,
+  "vocab_size": 32768,
+  "n_layer": 16,
+  "n_head": 8,
+  "n_kv_head": 8,
+  "n_embd": 1024,
+  "window_pattern": "L"
+}
+Successfully converted 97 layers to FP8, skipped 8 layers (dimensions not divisible by 16).
+Parameter counts:
+wte                    : 33,554,432
+value_embeds           : 268,435,456
+lm_head                : 33,554,432
+transformer_matrices   : 201,328,640
+scalars                : 32
+total                  : 536,872,992
+Estimated FLOPs per token: 1.811952e+09
+Auto-computed optimal batch size: 524,288 tokens
+Scaling weight decay from 0.200000 to 0.093750 for depth 16
+Scaling the LR for the AdamW parameters ∝1/√(1024/768) = 0.866025
+Calculated number of iterations from target data:param ratio: 4,704
+Total number of training tokens: 2,466,250,752
+Tokens : Scaling params ratio: 10.50
+Total training FLOPs estimate: 4.468727e+18
+Tokens / micro-batch / rank: 4 x 2048 = 8,192
+Tokens / micro-batch: 8,192
+Total batch size 524,288 => gradient accumulation steps: 64
+Step 00000 | Validation bpb: 3.175569
+Evaluating: hellaswag_zeroshot (0-shot, type: multiple_choice)... accuracy: 0.3180 | centered: 0.0907 | time: 8.64s
+Evaluating: jeopardy (10-shot, type: language_modeling)... accuracy: 0.0000 | centered: 0.0000 | time: 8.03s
+Evaluating: bigbench_qa_wikidata (10-shot, type: language_modeling)... accuracy: 0.0000 | centered: 0.0000 | time: 6.29s
+Evaluating: arc_easy (10-shot, type: multiple_choice)... accuracy: 0.2460 | centered: -0.0053 | time: 12.18s
+Evaluating: arc_challenge (10-shot, type: multiple_choice)... accuracy: 0.2260 | centered: -0.0320 | time: 14.47s
+Evaluating: copa (0-shot, type: multiple_choice)... accuracy: 0.5100 | centered: 0.0200 | time: 1.81s
+Evaluating: commonsense_qa (10-shot, type: multiple_choice)... accuracy: 0.4280 | centered: 0.2850 | time: 14.00s
+Evaluating: piqa (10-shot, type: multiple_choice)... accuracy: 0.5120 | centered: 0.0240 | time: 10.37s
+Evaluating: openbook_qa (0-shot, type: multiple_choice)... accuracy: 0.2600 | centered: 0.0133 | time: 7.30s
+Evaluating: lambada_openai (0-shot, type: language_modeling)... accuracy: 0.0000 | centered: 0.0000 | time: 7.66s
+Evaluating: hellaswag (10-shot, type: multiple_choice)... accuracy: 0.3180 | centered: 0.0907 | time: 27.74s
+Evaluating: winograd (0-shot, type: schema)...
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 438, in <module>
+    results = evaluate_core(orig_model, tokenizer, device, max_per_task=args.core_metric_max_per_task)
+  File "/root/angstromchat-pipeline/scripts/base_eval.py", line 105, in evaluate_core
+    accuracy = evaluate_task(model, tokenizer, data, device, task_meta)
+  File "/root/angstromchat-pipeline/angstromchat/core_eval.py", line 232, in evaluate_task
+    is_correct = evaluate_example(idx, model, tokenizer, data, device, task_meta)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/core_eval.py", line 167, in evaluate_example
+    prompts = render_prompts_schema(item, continuation_delimiter, fewshot_examples)
+  File "/root/angstromchat-pipeline/angstromchat/core_eval.py", line 46, in render_prompts_schema
+    prompts = [template.render(context=context_option, **context) for context_option in item['context_option']]
+KeyError: 'context_option'
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/root/angstromchat-pipeline/scripts/base_train.py", line 438, in <module>
+    results = evaluate_core(orig_model, tokenizer, device, max_per_task=args.core_metric_max_per_task)
+  File "/root/angstromchat-pipeline/scripts/base_eval.py", line 105, in evaluate_core
+    accuracy = evaluate_task(model, tokenizer, data, device, task_meta)
+  File "/root/angstromchat-pipeline/angstromchat/core_eval.py", line 232, in evaluate_task
+    is_correct = evaluate_example(idx, model, tokenizer, data, device, task_meta)
+  File "/root/angstromchat-pipeline/.venv/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/root/angstromchat-pipeline/angstromchat/core_eval.py", line 167, in evaluate_example
+    prompts = render_prompts_schema(item, continuation_delimiter, fewshot_examples)
+  File "/root/angstromchat-pipeline/angstromchat/core_eval.py", line 46, in render_prompts_schema
+    prompts = [template.render(context=context_option, **context) for context_option in item['context_option']]
+KeyError: 'context_option'

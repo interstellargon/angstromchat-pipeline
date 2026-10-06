@@ -65,7 +65,7 @@ def evaluate_core(model, tokenizer, device, max_per_task=-1):
     data_base_path = os.path.join(eval_bundle_dir, "eval_data")
     eval_meta_data = os.path.join(eval_bundle_dir, "eval_meta_data.csv")
 
-    with open(config_path, 'r', encodig='utf-8') as f:
+    with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     tasks = config['icl_tasks']
 
@@ -103,10 +103,14 @@ def evaluate_core(model, tokenizer, device, max_per_task=-1):
             data = data[:max_per_task]
 
         accuracy = evaluate_task(model, tokenizer, data, device, task_meta)
+        results[label] = accuracy
+        random_baseline = random_baselines[label]
+        centered_result = (accuracy - 0.01 * random_baseline) / (1 - 0.01 * random_baseline)
+        centered_results[label] = centered_result
+        elapsed = time.time() - start_time
+        print0(f"accuracy: {accuracy:.4f} | centered: {centered_result:.4f} | time: {elapsed:.2f}s")
 
-
-
-
+    core_metric = sum(centered_results.values()) / len(centered_results)
     out = {
         "results": results,
         "centered_results": centered_results,

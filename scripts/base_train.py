@@ -20,6 +20,7 @@ from angstromchat.checkpoint_manager import load_checkpoint
 from angstromchat.dataloader import tokenizing_distributed_data_loader_with_state_bos_bestfit, tokenizing_distributed_data_loader_bos_bestfit
 from angstromchat.loss_eval import evaluate_bpb
 from scripts.base_eval import evaluate_core
+from angstromchat.engine import Engine
 
 
 # -----------------------------------------------------------------------------
@@ -436,6 +437,33 @@ while True:
         model.eval()
         with disable_fp8(orig_model), autocast_ctx:
             results = evaluate_core(orig_model, tokenizer, device, max_per_task=args.core_metric_max_per_task)
+        print0(f"Step {step:05d} | CORE metric: {results['core_metric']:.4f}")
+        wandb_run.log({
+            "step": step,
+            "total_training_flops": flops_so_far,
+            "core_metric": results["core_metric"],
+            "centered_results": results["centered_results"],
+        })
+        model.train()
+
+    # once in a while: sample from the model (only on master process)
+    # use the original uncompiled model because the inputs keep changing shape
+    if args.sample_every > 0 and master_process and (last_step or (step > 0 and step % args.sample_every == 0)):
+        model.eval()
+        prompts = [
+            "The capital of France is",
+            "The chemical symbol of gold is",
+            "If yesterday was Friday, then tomorrow will be",
+            "The opposite of hot is",
+            "The planets of the solar system are:",
+            "My favorite color is",
+            "If 5*x + 3 = 13, then x is",
+        ]
+        engine = Engine(orig_model, tokenizer)  # use orig_model to avoid recompilation
+        for prompt in prompts:
+            tokens = tokenizer(prompt, prepend="<|bos|>")
+            with disable_fp8(orig_model), autocast_ctx:
+                sample, _ = engine.generate_batch(tokens, num_samples=1, max_tokens=16, temperature=0)
 
 
 

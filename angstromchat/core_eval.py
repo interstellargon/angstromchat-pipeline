@@ -43,7 +43,7 @@ def render_prompts_schema(item, continuation_delimiter, fewshot_examples=None):
         'continuation_delimiter': continuation_delimiter,
         'item': item
     }
-    prompts = [template.render(context=context_option, **context) for context_option in item['context_option']]
+    prompts = [template.render(context=context_option, **context) for context_option in item['context_options']]
     return prompts
 
 def render_prompts_lm(item, continuation_delimiter, fewshot_examples=None):
